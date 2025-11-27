@@ -1,0 +1,39 @@
+# kyle: toml
+version = "0.1.0"
+name = "kyle"
+
+[tasks.build]
+desc = "Build the kyle binary"
+run = "cargo build --release"
+
+[tasks.install]
+desc = "Build and install to ~/.cargo/bin"
+run = "cargo install --path ."
+
+[tasks.test]
+desc = "Run tests"
+run = "cargo test"
+
+[tasks.fmt]
+desc = "Format code"
+run = "cargo fmt"
+
+[tasks.check]
+desc = "Fast type-check without full build"
+run = "cargo check"
+
+[tasks.clippy]
+desc = "Run linter/static analysis"
+run = "cargo clippy -- -D warnings"
+
+[tasks.clean]
+desc = "Remove build artifacts"
+run = "cargo clean"
+
+[tasks.dev]
+desc = "Build debug binary"
+run = "cargo build"
+
+[tasks.upgrade]
+desc = "Build release and update bin/"
+run = "cargo build --release && rm -f bin/kyle && cp target/release/kyle bin/"

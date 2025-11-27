@@ -1,0 +1,103 @@
+# Kyle
+
+> A simple, extensible task runner for any project.
+
+Kyle is a command-line task runner that reads task definitions from a `Kylefile` and executes them. Similar to `make` or `just`, but with YAML/TOML configuration and a focus on simplicity/DX.
+
+## Quick Start
+
+Create a `Kylefile` in your project:
+
+```yaml
+name: my-project
+
+tasks:
+  build:
+    desc: Build the project
+    run: gcc -o main main.c
+
+  test:
+    desc: Run tests
+    run: ./test.sh
+    deps: [build]
+```
+
+Run tasks:
+- `kyle` - lists all tasks
+- `kyle build` - runs the build task
+- `kyle test` - runs test (and its dependency build)
+- `kyle help` - shows help
+
+## Kylefile Schema
+
+### YAML Format
+
+```yaml
+name: string           # Project name (optional)
+
+tasks:
+  task-name:
+    desc: string       # Description shown in task list (optional)
+    run: string        # Shell command to execute (required)
+    deps: [string]     # List of tasks to run first (optional)
+```
+
+### TOML Format
+
+Use `Kylefile.toml` or add `# kyle: toml` header to extensionless `Kylefile`:
+
+```toml
+name = "project-name"
+
+[tasks.build]
+desc = "Build the project"
+run = "make build"
+deps = ["clean"]
+```
+
+## File Detection Order
+
+Kyle looks for config files in this order:
+1. `Kylefile` (YAML default, or format specified by `# kyle: <format>` header)
+2. `Kylefile.yaml`
+3. `Kylefile.yml`
+4. `Kylefile.toml`
+
+## Common Patterns
+
+### Multi-line commands
+
+```yaml
+tasks:
+  setup:
+    run: |
+      npm install
+      npm run build
+      echo "Done!"
+```
+
+### Task chains via dependencies
+
+```yaml
+tasks:
+  clean:
+    run: rm -rf dist/
+
+  build:
+    run: npm run build
+    deps: [clean]
+
+  deploy:
+    run: ./deploy.sh
+    deps: [build]
+```
+
+Running `kyle deploy` will execute: clean -> build -> deploy
+
+## CLI Reference
+
+```
+kyle              List available tasks
+kyle <task>       Run a task
+kyle help         Show help message
+```

@@ -1,0 +1,31 @@
+# kyle: yaml
+name: kyle
+
+tasks:
+  build:
+    desc: Build the kyle binary
+    run: go build -o bin/kyle ./cmd/do
+
+  install:
+    desc: Build and install to ~/.local/bin
+    run: go build -o ~/.local/bin/kyle ./cmd/do
+
+  test:
+    desc: Run tests
+    run: go test ./...
+
+  format:
+    desc: Format code
+    run: go fmt ./...
+
+  vet:
+    desc: Run static analysis
+    run: go vet ./...
+
+  tidy:
+    desc: Tidy dependencies
+    run: go mod tidy
+
+  clean:
+    desc: Remove build artifacts
+    run: rm -rf bin/

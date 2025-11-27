@@ -1,0 +1,5 @@
+# Treat Kylefile as YAML for syntax highlighting
+Kylefile linguist-language=YAML
+Kylefile.yaml linguist-language=YAML
+Kylefile.yml linguist-language=YAML
+Kylefile.toml linguist-language=TOML

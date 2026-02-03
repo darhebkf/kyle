@@ -1,145 +1,85 @@
+# Kyle installer for Windows
+# Usage: irm https://kyle.dev/install.ps1 | iex
+
 $ErrorActionPreference = "Stop"
 
-$Repo = "behradeslamifar/kyle"
-$DefaultInstallDir = "$env:LOCALAPPDATA\kyle"
+$Repo = "darhebkf/kyle"
+$Target = "x86_64-pc-windows-msvc"
+$InstallDir = if ($env:KYLE_INSTALL_DIR) { $env:KYLE_INSTALL_DIR } else { "$env:USERPROFILE\.kyle\bin" }
 
-function Write-Banner {
-    Write-Host ""
-    Write-Host "  Kyle Installer" -ForegroundColor Cyan
-    Write-Host "  ---------------" -ForegroundColor DarkGray
-    Write-Host ""
+function Write-Info { param($Message) Write-Host "info: " -ForegroundColor Green -NoNewline; Write-Host $Message }
+function Write-Warn { param($Message) Write-Host "warn: " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
+function Write-Err { param($Message) Write-Host "error: " -ForegroundColor Red -NoNewline; Write-Host $Message; exit 1 }
+
+function Get-LatestVersion {
+    $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing
+    return $response.tag_name
 }
 
-function Write-Step {
-    param([string]$Message)
-    Write-Host "  → " -NoNewline -ForegroundColor Cyan
-    Write-Host $Message
-}
+function Install-Kyle {
+    Write-Info "Detected platform: windows-x86_64 ($Target)"
 
-function Write-Success {
-    param([string]$Message)
-    Write-Host "  ✓ " -NoNewline -ForegroundColor Green
-    Write-Host $Message
-}
-
-function Write-Warn {
-    param([string]$Message)
-    Write-Host "  ! " -NoNewline -ForegroundColor Yellow
-    Write-Host $Message
-}
-
-function Prompt-Input {
-    param([string]$Question, [string]$Default)
-    Write-Host "  $Question [$Default]: " -NoNewline
-    $input = Read-Host
-    if ([string]::IsNullOrWhiteSpace($input)) {
-        return $Default
+    # Get version
+    $version = if ($env:KYLE_VERSION) { $env:KYLE_VERSION } else { Get-LatestVersion }
+    if (-not $version) {
+        Write-Err "Could not determine latest version"
     }
-    return $input
-}
+    Write-Info "Installing kyle $version"
 
-function Get-Architecture {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-    switch ($arch) {
-        "X64" { return "amd64" }
-        "Arm64" { return "arm64" }
-        default {
-            Write-Warn "Unsupported architecture: $arch"
-            exit 1
-        }
-    }
-}
+    # Download URL
+    $url = "https://github.com/$Repo/releases/download/$version/kyle-$Target.zip"
 
-function Install-FromRelease {
-    param([string]$InstallDir, [string]$Version, [string]$Arch)
-
-    $Url = "https://github.com/$Repo/releases/download/$Version/kyle-windows-$Arch.exe"
-
-    Write-Step "Downloading kyle $Version..."
-
-    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-
-    $OutFile = Join-Path $InstallDir "kyle.exe"
-    Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
-}
-
-function Install-FromSource {
-    param([string]$InstallDir)
-
-    $GoPath = Get-Command go -ErrorAction SilentlyContinue
-    if (-not $GoPath) {
-        Write-Warn "Go is required to build from source"
-        Write-Host "  Install Go from https://go.dev/doc/install" -ForegroundColor White
-        exit 1
-    }
-
-    $TmpDir = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
-
-    Push-Location $TmpDir
-
-    Write-Step "Cloning repository..."
-    git clone --depth 1 --quiet "https://github.com/$Repo.git" kyle
-    Set-Location kyle
-
-    Write-Step "Building..."
-    go build -o kyle.exe ./cmd/do
-
-    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-    Move-Item kyle.exe (Join-Path $InstallDir "kyle.exe") -Force
-
-    Pop-Location
-    Remove-Item $TmpDir -Recurse -Force
-}
-
-function Add-ToPath {
-    param([string]$Dir)
-
-    $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ($CurrentPath -notlike "*$Dir*") {
-        Write-Host ""
-        Write-Warn "Add to your PATH:"
-        Write-Host ""
-        Write-Host "      [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$Dir', 'User')" -ForegroundColor DarkGray
-        Write-Host ""
-        Write-Host "  Or add manually via System Properties → Environment Variables"
-        return $false
-    }
-    return $true
-}
-
-function Main {
-    Write-Banner
-
-    $Arch = Get-Architecture
-    Write-Host "  Detected: windows/$Arch" -ForegroundColor White
-    Write-Host ""
-
-    $InstallDir = Prompt-Input "Install location" $DefaultInstallDir
-
-    Write-Host ""
-    Write-Step "Fetching latest release..."
+    # Create temp directory
+    $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Path $tmpDir | Out-Null
 
     try {
-        $Release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing
-        $Version = $Release.tag_name
+        # Download
+        Write-Info "Downloading from $url"
+        $zipPath = Join-Path $tmpDir "kyle.zip"
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
 
-        Install-FromRelease -InstallDir $InstallDir -Version $Version -Arch $Arch
+        # Extract
+        Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force
+
+        # Install
+        if (-not (Test-Path $InstallDir)) {
+            New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+        }
+        $exePath = Join-Path $InstallDir "kyle.exe"
+        Move-Item -Path (Join-Path $tmpDir "kyle.exe") -Destination $exePath -Force
+
+        Write-Info "Installed kyle to $exePath"
+
+        # Check PATH
+        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        if ($userPath -notlike "*$InstallDir*") {
+            Write-Warn "$InstallDir is not in your PATH"
+            Write-Host ""
+            $addToPath = Read-Host "Add to PATH? [Y/n]"
+            if ($addToPath -ne "n" -and $addToPath -ne "N") {
+                [Environment]::SetEnvironmentVariable("Path", "$userPath;$InstallDir", "User")
+                $env:Path = "$env:Path;$InstallDir"
+                Write-Info "Added to PATH"
+            } else {
+                Write-Host ""
+                Write-Host "To add manually, run:"
+                Write-Host ""
+                Write-Host "  `$env:Path += `";$InstallDir`""
+                Write-Host ""
+            }
+        }
+
+        Write-Host ""
+        Write-Host "✓ " -ForegroundColor Green -NoNewline
+        Write-Host "kyle $version installed successfully!"
+        Write-Host ""
+        Write-Host "Run 'kyle --help' to get started."
     }
-    catch {
-        Write-Warn "No releases found, building from source..."
-        Install-FromSource -InstallDir $InstallDir
+    finally {
+        # Cleanup
+        Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
     }
-
-    Write-Host ""
-    Write-Success "Installed kyle to $InstallDir\kyle.exe"
-
-    Add-ToPath -Dir $InstallDir
-
-    Write-Host ""
-    Write-Host "  Run " -NoNewline
-    Write-Host "kyle help" -ForegroundColor White -NoNewline
-    Write-Host " to get started."
-    Write-Host ""
 }
 
-Main
+Install-Kyle

@@ -1,149 +1,146 @@
 #!/bin/sh
+# Kyle installer for Unix systems (Linux, macOS)
+# Usage: curl -fsSL https://kyle.dev/install.sh | sh
+
 set -e
 
-REPO="behradeslamifar/kyle"
-DEFAULT_INSTALL_DIR="$HOME/.local/bin"
+REPO="darhebkf/kyle"
+INSTALL_DIR="${KYLE_INSTALL_DIR:-$HOME/.local/bin}"
 
-# Colors (will be disabled if not a tty)
-if [ -t 1 ]; then
-    BOLD='\033[1m'
-    DIM='\033[2m'
-    GREEN='\033[32m'
-    YELLOW='\033[33m'
-    CYAN='\033[36m'
-    RESET='\033[0m'
-else
-    BOLD='' DIM='' GREEN='' YELLOW='' CYAN='' RESET=''
-fi
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-print_banner() {
-    printf "\n"
-    printf "${BOLD}${CYAN}  Kyle Installer${RESET}\n"
-    printf "${DIM}  ───────────────${RESET}\n\n"
-}
+info() { printf "${GREEN}info${NC}: %s\n" "$1"; }
+warn() { printf "${YELLOW}warn${NC}: %s\n" "$1"; }
+error() { printf "${RED}error${NC}: %s\n" "$1" >&2; exit 1; }
 
-print_step() {
-    printf "  ${CYAN}→${RESET} %s\n" "$1"
-}
-
-print_success() {
-    printf "  ${GREEN}✓${RESET} %s\n" "$1"
-}
-
-print_warn() {
-    printf "  ${YELLOW}!${RESET} %s\n" "$1"
-}
-
-prompt() {
-    printf "  %s [%s]: " "$1" "$2"
-    read -r input
-    echo "${input:-$2}"
-}
-
-main() {
-    print_banner
-
-    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-    ARCH=$(uname -m)
-
-    case "$ARCH" in
-        x86_64) ARCH="amd64" ;;
-        aarch64|arm64) ARCH="arm64" ;;
-        *)
-            print_warn "Unsupported architecture: $ARCH"
-            exit 1
-            ;;
+# Detect OS
+detect_os() {
+    case "$(uname -s)" in
+        Linux*)  echo "linux" ;;
+        Darwin*) echo "darwin" ;;
+        *)       error "Unsupported OS: $(uname -s)" ;;
     esac
-
-    case "$OS" in
-        linux|darwin) ;;
-        *)
-            print_warn "Unsupported OS: $OS"
-            print_warn "For Windows, use install.ps1"
-            exit 1
-            ;;
-    esac
-
-    printf "  Detected: ${BOLD}%s/%s${RESET}\n\n" "$OS" "$ARCH"
-
-    INSTALL_DIR=$(prompt "Install location" "$DEFAULT_INSTALL_DIR")
-
-    printf "\n"
-    print_step "Fetching latest release..."
-
-    LATEST=$(curl -sL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | grep '"tag_name"' | cut -d'"' -f4)
-
-    if [ -z "$LATEST" ]; then
-        print_warn "No releases found, building from source..."
-        install_from_source "$INSTALL_DIR"
-    else
-        install_from_release "$INSTALL_DIR" "$LATEST" "$OS" "$ARCH"
-    fi
-
-    printf "\n"
-    print_success "Installed kyle to $INSTALL_DIR/kyle"
-
-    if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
-        printf "\n"
-        print_warn "Add to your PATH:"
-        printf "\n"
-        printf "      ${DIM}export PATH=\"%s:\$PATH\"${RESET}\n" "$INSTALL_DIR"
-        printf "\n"
-        printf "  Add this to your ${BOLD}~/.bashrc${RESET} or ${BOLD}~/.zshrc${RESET}\n"
-    fi
-
-    printf "\n"
-    printf "  Run ${BOLD}kyle help${RESET} to get started.\n\n"
 }
 
-install_from_release() {
-    INSTALL_DIR="$1"
-    VERSION="$2"
-    OS="$3"
-    ARCH="$4"
+# Detect architecture
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64)  echo "x86_64" ;;
+        aarch64|arm64) echo "aarch64" ;;
+        *)             error "Unsupported architecture: $(uname -m)" ;;
+    esac
+}
 
-    URL="https://github.com/$REPO/releases/download/$VERSION/kyle-${OS}-${ARCH}"
+# Map to target triple
+get_target() {
+    local os="$1"
+    local arch="$2"
 
-    print_step "Downloading kyle $VERSION..."
+    case "$os-$arch" in
+        linux-x86_64)   echo "x86_64-unknown-linux-musl" ;;
+        linux-aarch64)  echo "aarch64-unknown-linux-musl" ;;
+        darwin-x86_64)  echo "x86_64-apple-darwin" ;;
+        darwin-aarch64) echo "aarch64-apple-darwin" ;;
+        *)              error "Unsupported platform: $os-$arch" ;;
+    esac
+}
 
+# Get latest release version
+get_latest_version() {
+    curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" |
+        grep '"tag_name":' |
+        sed -E 's/.*"([^"]+)".*/\1/'
+}
+
+# Download and install
+install() {
+    local os=$(detect_os)
+    local arch=$(detect_arch)
+    local target=$(get_target "$os" "$arch")
+
+    info "Detected platform: $os-$arch ($target)"
+
+    # Get version
+    local version="${KYLE_VERSION:-$(get_latest_version)}"
+    if [ -z "$version" ]; then
+        error "Could not determine latest version"
+    fi
+    info "Installing kyle $version"
+
+    # Download URL
+    local url="https://github.com/$REPO/releases/download/$version/kyle-$target.tar.gz"
+
+    # Create temp directory
+    local tmp_dir=$(mktemp -d)
+    trap "rm -rf $tmp_dir" EXIT
+
+    # Download
+    info "Downloading from $url"
+    curl -fsSL "$url" -o "$tmp_dir/kyle.tar.gz" || error "Download failed"
+
+    # Extract
+    tar -xzf "$tmp_dir/kyle.tar.gz" -C "$tmp_dir" || error "Extraction failed"
+
+    # Install
     mkdir -p "$INSTALL_DIR"
-
-    if command -v curl > /dev/null; then
-        curl -sL "$URL" -o "$INSTALL_DIR/kyle"
-    elif command -v wget > /dev/null; then
-        wget -q "$URL" -O "$INSTALL_DIR/kyle"
-    else
-        print_warn "curl or wget required"
-        exit 1
-    fi
-
+    mv "$tmp_dir/kyle" "$INSTALL_DIR/kyle" || error "Installation failed"
     chmod +x "$INSTALL_DIR/kyle"
-}
 
-install_from_source() {
-    INSTALL_DIR="$1"
+    info "Installed kyle to $INSTALL_DIR/kyle"
 
-    if ! command -v go > /dev/null; then
-        print_warn "Go is required to build from source"
-        printf "  Install Go from ${BOLD}https://go.dev/doc/install${RESET}\n"
-        exit 1
+    # Detect shell profile
+    local profile=""
+    if [ -n "$ZSH_VERSION" ] || [ -f "$HOME/.zshrc" ]; then
+        profile="$HOME/.zshrc"
+    elif [ -f "$HOME/.bashrc" ]; then
+        profile="$HOME/.bashrc"
+    elif [ -f "$HOME/.profile" ]; then
+        profile="$HOME/.profile"
     fi
 
-    TMPDIR=$(mktemp -d)
-    cd "$TMPDIR"
+    local path_added=false
 
-    print_step "Cloning repository..."
-    git clone --depth 1 --quiet "https://github.com/$REPO.git" kyle
-    cd kyle
+    # Check if in PATH
+    if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
+        warn "$INSTALL_DIR is not in your PATH"
+        echo ""
+        printf "Add to PATH? [Y/n] "
+        read -r answer
+        if [ "$answer" != "n" ] && [ "$answer" != "N" ]; then
+            if [ -n "$profile" ]; then
+                echo "" >> "$profile"
+                echo "# Kyle" >> "$profile"
+                echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$profile"
+                info "Added to $profile"
+                path_added=true
+            else
+                warn "Could not detect shell profile"
+                echo ""
+                echo "Add this manually to your shell profile:"
+                echo ""
+                echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
+            fi
+        fi
+        echo ""
+    fi
 
-    print_step "Building..."
-    go build -o kyle ./cmd/do
+    echo ""
+    printf "${GREEN}✓${NC} kyle $version installed successfully!\n"
+    echo ""
 
-    mkdir -p "$INSTALL_DIR"
-    mv kyle "$INSTALL_DIR/kyle"
-
-    cd /
-    rm -rf "$TMPDIR"
+    # Show how to start using kyle
+    if echo "$PATH" | grep -q "$INSTALL_DIR"; then
+        echo "Run 'kyle --help' to get started."
+    elif [ "$path_added" = true ]; then
+        echo "To start using kyle, either:"
+        echo ""
+        echo "  1. Open a new terminal, or"
+        echo "  2. Run: source $profile"
+    fi
 }
 
-main
+install

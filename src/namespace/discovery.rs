@@ -74,7 +74,7 @@ pub fn discover_namespaces(root: &Path) -> Vec<DiscoveredNamespace> {
 
         // Create alias from relative path
         if let Ok(relative) = dir.strip_prefix(root) {
-            let alias = relative.to_string_lossy().to_string();
+            let alias = relative.to_string_lossy().replace('\\', "/");
             if !alias.is_empty() {
                 namespaces.push(DiscoveredNamespace {
                     alias,

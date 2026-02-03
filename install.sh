@@ -1,6 +1,6 @@
 #!/bin/sh
 # Kyle installer for Unix systems (Linux, macOS)
-# Usage: curl -fsSL https://kyle.dev/install.sh | sh
+# Usage: curl -fsSL https://kylefile.dev/install.sh | sh
 
 set -e
 

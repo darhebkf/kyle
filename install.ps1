@@ -1,5 +1,5 @@
 # Kyle installer for Windows
-# Usage: irm https://kyle.dev/install.ps1 | iex
+# Usage: irm https://kylefile.dev/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 

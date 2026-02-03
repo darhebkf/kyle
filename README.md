@@ -1,100 +1,114 @@
 # Kyle
 
-A simple, extensible task runner. Define your project tasks in a `Kylefile` and run them with `kyle <task>`.
+A simple, polyglot task runner. Define your project tasks in a `Kylefile` and run them with `kyle <task>`.
 
 ## Installation
 
 ```bash
-curl -sSL https://kylefile.dev/install.sh | sh
+curl -fsSL https://kylefile.dev/install.sh | sh
+```
+
+Windows:
+```powershell
+irm https://kylefile.dev/install.ps1 | iex
 ```
 
 Or build from source:
-
 ```bash
-go build -o kyle ./cmd/do
-mv kyle ~/.local/bin/
+cargo build --release
+mv target/release/kyle ~/.local/bin/
 ```
 
 ## Usage
 
-Create a `Kylefile` in your project root:
-
-```yaml
-name: my-project
-
-tasks:
-  build:
-    desc: Build the project
-    run: make build
-
-  test:
-    desc: Run tests
-    run: make test
-    deps: [build]
-
-  clean:
-    desc: Clean build artifacts
-    run: rm -rf build/
-```
-
-Then run:
-
 ```bash
 kyle          # List available tasks
 kyle build    # Run the build task
-kyle test     # Run test (runs build first due to deps)
+kyle test     # Run test task
 ```
 
-**Note:** Task names `init`, `config`, `help`, `version` are reserved for built-in commands.
+### Zero Config
 
-## Kylefile Formats
+Kyle auto-detects and runs existing project files:
 
-Kyle supports multiple config formats:
+```bash
+# Have a Makefile? Just works.
+kyle build    # runs make build
 
-- `Kylefile` (YAML by default, or specify format with header)
-- `Kylefile.yaml` / `Kylefile.yml`
-- `Kylefile.toml`
-
-For extensionless `Kylefile`, you can specify the format with a header comment:
-
-```yaml
-# kyle: yaml
-name: my-project
-tasks:
-  build:
-    run: make
+# Have a Justfile? Just works.
+kyle test     # runs just test
 ```
+
+### Kylefile
+
+Create a `Kylefile` for custom tasks:
 
 ```toml
 # kyle: toml
 name = "my-project"
 
 [tasks.build]
-run = "make"
+desc = "Build the project"
+run = "cargo build --release"
+
+[tasks.test]
+desc = "Run tests"
+run = "cargo test"
+deps = ["build"]
+```
+
+Or YAML:
+```yaml
+# kyle: yaml
+name: my-project
+
+tasks:
+  build:
+    desc: Build the project
+    run: cargo build --release
+```
+
+## Namespaces
+
+Run tasks in subdirectories:
+
+```bash
+kyle backend:build      # runs build task in ./backend/
+kyle frontend:test      # runs test task in ./frontend/
+kyle apps/mobile:dev    # nested namespaces work too
+```
+
+Cross-namespace dependencies:
+```toml
+[tasks.deploy]
+deps = ["backend:build", "frontend:build"]
+run = "echo deploying"
+```
+
+## File Priority
+
+Kyle looks for files in this order:
+
+1. `Kylefile`, `Kylefile.yaml`, `Kylefile.yml`, `Kylefile.toml`
+2. `Makefile`, `makefile`, `GNUmakefile`
+3. `justfile`, `Justfile`
+
+## Configuration
+
+```bash
+kyle config list              # Show all settings
+kyle config get default_format
+kyle config set default_format yaml
 ```
 
 ## Features
 
-- Simple YAML/TOML configuration
+- Multi-format: YAML, TOML, and more coming soon
+- Zero migration: works with existing Makefiles and Justfiles with other manifests coming soon
+- Namespaces: `kyle backend:build` for monorepos
 - Task dependencies
-- Multi-format support
-- Format auto-detection via header (`# kyle: toml`)
-- Extensible architecture
-
-## Roadmap
-
-Planned features for future releases:
-
-- [ ] JSON format support
-- [ ] XML format support
-- [ ] Auto-fix suggestions for failed commands
-- [ ] Global configuration (`~/.config/kyle/`)
-- [ ] Virtual environment support (venv, nvm, etc.)
-- [ ] Plugin/extension system
-- [ ] Interactive TUI mode
-- [ ] LLM integration for task suggestions
-- [ ] MCP server for IDE integration
-- [ ] Makefile format support
+- Argument passthrough: `kyle build --release`
+- Cross-platform: Linux, macOS, Windows
 
 ## License
 

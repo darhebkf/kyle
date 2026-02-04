@@ -8,6 +8,10 @@ fn kyle() -> Command {
     cargo_bin_cmd!("kyle")
 }
 
+fn version_pattern() -> predicates::str::RegexPredicate {
+    predicate::str::is_match(r"kyle v\d+\.\d+\.\d+").unwrap()
+}
+
 // =============================================================================
 // Help & Version
 // =============================================================================
@@ -46,7 +50,7 @@ fn version_command() {
         .arg("version")
         .assert()
         .success()
-        .stdout(predicate::str::contains("kyle v0.1.0"));
+        .stdout(version_pattern());
 }
 
 #[test]
@@ -55,7 +59,7 @@ fn version_flag() {
         .arg("--version")
         .assert()
         .success()
-        .stdout(predicate::str::contains("kyle v0.1.0"));
+        .stdout(version_pattern());
 }
 
 #[test]
@@ -64,7 +68,7 @@ fn version_short_flag() {
         .arg("-v")
         .assert()
         .success()
-        .stdout(predicate::str::contains("kyle v0.1.0"));
+        .stdout(version_pattern());
 }
 
 // =============================================================================

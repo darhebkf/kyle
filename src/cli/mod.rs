@@ -1,5 +1,6 @@
 mod config;
 mod init;
+mod upgrade;
 
 use crate::config::{self as kylefile_config, Source, load_from_dir};
 use crate::namespace::discovery::{FileType, discover_namespaces};
@@ -58,6 +59,9 @@ enum Command {
 
     /// Print version
     Version,
+
+    /// Upgrade kyle to the latest version (duh)
+    Upgrade,
 }
 
 #[derive(Subcommand)]
@@ -84,6 +88,8 @@ enum ConfigAction {
 }
 
 pub fn run() -> Result<()> {
+    upgrade::check_auto_upgrade();
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -102,6 +108,7 @@ pub fn run() -> Result<()> {
             println!("kyle {VERSION}");
             Ok(())
         }
+        Some(Command::Upgrade) => upgrade::run(),
         None => run_tasks(cli.task.as_deref(), &cli.args),
     }
 }

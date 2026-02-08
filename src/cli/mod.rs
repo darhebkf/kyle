@@ -118,20 +118,25 @@ fn run_tasks(task: Option<&str>, args: &[String]) -> Result<()> {
 
     match task {
         Some(task_input) => {
+            if let Ok((kf, source)) = kylefile_config::load("")
+                && kf.tasks.contains_key(task_input)
+            {
+                if source != Source::Kylefile {
+                    output::warn("no Kylefile found, run 'kyle init' to create one");
+                }
+                let mut runner = Runner::with_working_dir(kf, cwd.to_path_buf(), cwd.to_path_buf());
+                return runner.run(task_input, args).map_err(Into::into);
+            }
+
             let task_ref = parse_task_ref(task_input);
 
             if let Some(namespace) = &task_ref.namespace {
-                // Explicit namespace - load from namespace directory (no warning)
                 run_namespaced_task(&cwd, namespace, &task_ref.task_name, args)
             } else {
-                // No namespace - load from current directory (may warn)
                 run_local_task(&cwd, &task_ref.task_name, args)
             }
         }
-        None => {
-            // List tasks from current directory + discovered namespaces
-            list_all_tasks(&cwd)
-        }
+        None => list_all_tasks(&cwd),
     }
 }
 

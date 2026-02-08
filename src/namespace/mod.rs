@@ -28,11 +28,24 @@ impl TaskRef {
     }
 }
 
-/// Parse a task reference like "backend:build" or "apps/frontend:test"
+/// Parse a task reference like "backend:build", "backend.build", or "apps/frontend:test"
 /// Returns TaskRef with namespace and task name separated
 pub fn parse_task_ref(input: &str) -> TaskRef {
-    match input.rsplit_once(':') {
-        Some((namespace, task)) if !namespace.is_empty() && !task.is_empty() => {
+    // Find the rightmost separator (either ':' or '.')
+    let colon_pos = input.rfind(':');
+    let dot_pos = input.rfind('.');
+
+    let split_pos = match (colon_pos, dot_pos) {
+        (Some(c), Some(d)) => Some(c.max(d)), // Use rightmost
+        (Some(c), None) => Some(c),
+        (None, Some(d)) => Some(d),
+        (None, None) => None,
+    };
+
+    match split_pos {
+        Some(pos) if pos > 0 && pos < input.len() - 1 => {
+            let namespace = &input[..pos];
+            let task = &input[pos + 1..];
             TaskRef::with_namespace(namespace, task)
         }
         _ => TaskRef::new(input),
@@ -58,7 +71,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_namespaced_task() {
+    fn test_parse_namespaced_task_colon() {
         let task_ref = parse_task_ref("backend:build");
         assert_eq!(task_ref.namespace, Some("backend".into()));
         assert_eq!(task_ref.task_name, "build");
@@ -66,24 +79,69 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_nested_namespace() {
+    fn test_parse_namespaced_task_dot() {
+        let task_ref = parse_task_ref("backend.build");
+        assert_eq!(task_ref.namespace, Some("backend".into()));
+        assert_eq!(task_ref.task_name, "build");
+        assert!(task_ref.is_namespaced());
+    }
+
+    #[test]
+    fn test_parse_nested_namespace_colon() {
         let task_ref = parse_task_ref("apps/frontend:test");
         assert_eq!(task_ref.namespace, Some("apps/frontend".into()));
         assert_eq!(task_ref.task_name, "test");
     }
 
     #[test]
-    fn test_parse_empty_namespace() {
+    fn test_parse_nested_namespace_dot() {
+        let task_ref = parse_task_ref("apps/frontend.test");
+        assert_eq!(task_ref.namespace, Some("apps/frontend".into()));
+        assert_eq!(task_ref.task_name, "test");
+    }
+
+    #[test]
+    fn test_parse_mixed_separators_colon_last() {
+        // "backend.sub:build" -> namespace="backend.sub", task="build"
+        let task_ref = parse_task_ref("backend.sub:build");
+        assert_eq!(task_ref.namespace, Some("backend.sub".into()));
+        assert_eq!(task_ref.task_name, "build");
+    }
+
+    #[test]
+    fn test_parse_mixed_separators_dot_last() {
+        // "backend:sub.build" -> namespace="backend:sub", task="build"
+        let task_ref = parse_task_ref("backend:sub.build");
+        assert_eq!(task_ref.namespace, Some("backend:sub".into()));
+        assert_eq!(task_ref.task_name, "build");
+    }
+
+    #[test]
+    fn test_parse_empty_namespace_colon() {
         let task_ref = parse_task_ref(":build");
         assert_eq!(task_ref.namespace, None);
         assert_eq!(task_ref.task_name, ":build");
     }
 
     #[test]
-    fn test_parse_empty_task() {
+    fn test_parse_empty_namespace_dot() {
+        let task_ref = parse_task_ref(".build");
+        assert_eq!(task_ref.namespace, None);
+        assert_eq!(task_ref.task_name, ".build");
+    }
+
+    #[test]
+    fn test_parse_empty_task_colon() {
         let task_ref = parse_task_ref("backend:");
         assert_eq!(task_ref.namespace, None);
         assert_eq!(task_ref.task_name, "backend:");
+    }
+
+    #[test]
+    fn test_parse_empty_task_dot() {
+        let task_ref = parse_task_ref("backend.");
+        assert_eq!(task_ref.namespace, None);
+        assert_eq!(task_ref.task_name, "backend.");
     }
 
     #[test]

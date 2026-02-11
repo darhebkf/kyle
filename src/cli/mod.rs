@@ -62,6 +62,9 @@ enum Command {
 
     /// Upgrade kyle to the latest version (duh)
     Upgrade,
+
+    /// Start MCP server (used by AI clients, not run manually)
+    Mcp,
 }
 
 #[derive(Subcommand)]
@@ -109,6 +112,7 @@ pub fn run() -> Result<()> {
             Ok(())
         }
         Some(Command::Upgrade) => upgrade::run(),
+        Some(Command::Mcp) => tokio::runtime::Runtime::new()?.block_on(crate::mcp::serve()),
         None => run_tasks(cli.task.as_deref(), &cli.args),
     }
 }

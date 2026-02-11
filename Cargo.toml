@@ -9,6 +9,7 @@ serde_yml = "0.0.12"
 toml = { version = "0.9.11", features = ["parse", "display"] }
 dirs = "6.0.0"
 clap = { version = "4.5.57", features = ["derive", "color"] }
+clap_complete = "4.5.65"
 anstyle = "1.0.13"
 thiserror = "2.0.18"
 anyhow = "1.0.101"

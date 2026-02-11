@@ -1,3 +1,4 @@
+mod completions;
 mod config;
 mod init;
 mod upgrade;
@@ -65,6 +66,12 @@ enum Command {
 
     /// Start MCP server (used by AI clients, not run manually)
     Mcp,
+
+    /// Generate shell completions
+    Completions {
+        /// Shell type (bash, zsh, fish)
+        shell: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -113,6 +120,7 @@ pub fn run() -> Result<()> {
         }
         Some(Command::Upgrade) => upgrade::run(),
         Some(Command::Mcp) => tokio::runtime::Runtime::new()?.block_on(crate::mcp::serve()),
+        Some(Command::Completions { shell }) => completions::run(&shell),
         None => run_tasks(cli.task.as_deref(), &cli.args),
     }
 }

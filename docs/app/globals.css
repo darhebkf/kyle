@@ -15,6 +15,27 @@
   --color-brand-mint-foreground: #000000;
 }
 
+/* Nextra primary color → rose brand (#ff2056 ≈ hsl 345 100% 56%) */
+:root {
+  --nextra-primary-hue: 345deg !important;
+  --nextra-primary-saturation: 100% !important;
+  --nextra-primary-lightness: 56% !important;
+}
+.dark {
+  --nextra-primary-hue: 345deg !important;
+  --nextra-primary-saturation: 100% !important;
+  --nextra-primary-lightness: 56% !important;
+}
+
+/* Neobrutalism: no rounded corners on nextra elements */
+.nextra-sidebar a,
+.nextra-sidebar button,
+.nextra-card,
+.nextra-code {
+  border-radius: 0 !important;
+}
+
+/* Active sidebar link — brand color text, no bg */
 .x\:bg-primary-100 {
   background-color: transparent !important;
 }
@@ -23,8 +44,67 @@
   background-color: transparent !important;
 }
 
+/* Bold doesn't suit FSEX300 — use medium weight */
 .x\:font-semibold {
   font-weight: 500 !important;
+}
+
+/* Neobrutalism sidebar border */
+.nextra-sidebar {
+  border-right: 2px solid var(--border) !important;
+}
+
+/* Neobrutalism: thicker borders on nextra cards */
+.nextra-card {
+  border-width: 2px !important;
+  box-shadow: 3px 3px 0px var(--border);
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.nextra-card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px var(--border);
+}
+
+/* Links in docs content — brand color */
+.nextra-body-typesetting-article a {
+  color: #ff2056 !important;
+  text-decoration-color: #ff2056 !important;
+}
+
+/* Inline code — sharper */
+.nextra-body-typesetting-article code:not(pre code) {
+  border-radius: 0 !important;
+  border-width: 1px !important;
+}
+
+/* Neobrutalism search input */
+.nextra-search input {
+  border-radius: 0 !important;
+  border: 2px solid var(--border) !important;
+  background: var(--background) !important;
+}
+
+.nextra-search input:focus {
+  border-color: #ff2056 !important;
+  box-shadow: 3px 3px 0px black !important;
+}
+
+:is(.dark) .nextra-search input:focus {
+  box-shadow: 3px 3px 0px rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Search results dropdown — sharp corners, neobrutalism shadow */
+.nextra-search [data-headlessui-state] {
+  border-radius: 0 !important;
+  border: 2px solid var(--border) !important;
+  box-shadow: 4px 4px 0px black !important;
+}
+
+:is(.dark) .nextra-search [data-headlessui-state] {
+  box-shadow: 4px 4px 0px rgba(255, 255, 255, 0.15) !important;
 }
 
 @theme inline {

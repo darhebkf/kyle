@@ -1,8 +1,10 @@
 "use client";
 
 import { motion } from "motion/react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import FaultyTerminal from "@/components/FaultyTerminal";
+import { Button } from "@/components/retroui/Button";
 
 const GRID_MUL: [number, number] = [2, 1];
 
@@ -38,10 +40,10 @@ function InstallCommand() {
       <button
         type="button"
         onClick={handleCopy}
-        className="group flex items-center gap-3 bg-black/40 border border-white/10 rounded-lg px-5 py-3 hover:bg-black/60 hover:border-white/20 transition-all cursor-pointer backdrop-blur-sm"
+        className="group flex items-center gap-3 bg-black border-2 border-white/60 px-5 py-3 hover:bg-black/90 transition-all cursor-pointer shadow-[4px_4px_0px_rgba(255,255,255,0.5)] hover:shadow-[2px_2px_0px_rgba(255,255,255,0.5)] hover:translate-y-0.5 active:shadow-none active:translate-y-1"
       >
         <span className="text-white/60 text-sm font-mono">$</span>
-        <code className="text-[#86EFAC] font-mono text-sm">{command}</code>
+        <code className="text-brand-mint font-mono text-sm">{command}</code>
         <svg
           className="w-4 h-4 ml-2 text-white/30 group-hover:text-white/50 transition-colors"
           fill="none"
@@ -134,6 +136,20 @@ export default function LandingPage() {
           >
             <InstallCommand />
           </motion.div>
+          <motion.div
+            className="mt-6"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.6 }}
+          >
+            <Button
+              asChild
+              size="lg"
+              className="rounded-none bg-brand text-white border-2 border-white/60 shadow-[4px_4px_0px_rgba(255,255,255,0.5)] hover:shadow-[2px_2px_0px_rgba(255,255,255,0.5)] active:shadow-none"
+            >
+              <Link href="/docs">Get Started</Link>
+            </Button>
+          </motion.div>
         </div>
       )}
       {showContent && (
@@ -141,7 +157,7 @@ export default function LandingPage() {
           className="absolute bottom-4 left-0 right-0 text-center text-xs text-white/60 z-20"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.6 }}
+          transition={{ duration: 0.6, delay: 0.8 }}
         >
           © {new Date().getFullYear()} Kyle. All rights reserved.
         </motion.div>

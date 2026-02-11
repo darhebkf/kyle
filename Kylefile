@@ -14,7 +14,7 @@ run = "cargo install --path ."
 desc = "Run tests"
 run = "cargo test"
 
-[tasks.fmt]
+[tasks.format]
 desc = "Format code"
 run = "cargo fmt"
 

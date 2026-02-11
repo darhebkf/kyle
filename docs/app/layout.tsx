@@ -9,11 +9,6 @@ const fsex = localFont({
   variable: "--font-fsex",
 });
 
-const cascadiaCode = localFont({
-  src: "../public/fonts/CascadiaCode-Bold.ttf",
-  variable: "--font-cascadia",
-});
-
 export const metadata = {
   title: "Kyle",
   description: "A fast, polyglot and customizable project manager runner",
@@ -25,7 +20,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       lang="en"
       dir="ltr"
       suppressHydrationWarning
-      className={`${fsex.variable} ${cascadiaCode.variable}`}
+      className={fsex.variable}
     >
       <Head />
       <body className="font-sans">{children}</body>

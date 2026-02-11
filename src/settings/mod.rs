@@ -26,6 +26,12 @@ pub struct Settings {
     pub default_format: String,
     #[serde(default)]
     pub auto_upgrade: bool,
+    #[serde(default = "default_true")]
+    pub verify_updates: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_format() -> String {
@@ -37,6 +43,7 @@ impl Default for Settings {
         Self {
             default_format: default_format(),
             auto_upgrade: false,
+            verify_updates: true,
         }
     }
 }
@@ -94,6 +101,16 @@ pub fn set(key: &str, value: &str) -> Result<(), Error> {
             }
             settings.auto_upgrade = value == "true";
         }
+        "verify_updates" => {
+            if !ALLOWED_BOOLS.contains(&value) {
+                return Err(Error::InvalidValue {
+                    key: key.into(),
+                    value: value.into(),
+                    allowed: ALLOWED_BOOLS.join(", "),
+                });
+            }
+            settings.verify_updates = value == "true";
+        }
         _ => return Err(Error::UnknownKey(key.into())),
     }
 
@@ -106,6 +123,7 @@ pub fn get_value(key: &str) -> Result<String, Error> {
     match key {
         "default_format" => Ok(settings.default_format),
         "auto_upgrade" => Ok(settings.auto_upgrade.to_string()),
+        "verify_updates" => Ok(settings.verify_updates.to_string()),
         _ => Err(Error::UnknownKey(key.into())),
     }
 }
@@ -132,5 +150,6 @@ pub fn list() -> HashMap<&'static str, String> {
     HashMap::from([
         ("default_format", settings.default_format),
         ("auto_upgrade", settings.auto_upgrade.to_string()),
+        ("verify_updates", settings.verify_updates.to_string()),
     ])
 }

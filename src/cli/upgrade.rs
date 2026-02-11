@@ -72,6 +72,13 @@ fn do_upgrade(verbose: bool) -> Result<()> {
     let tmp_path = tmp_dir.join(&asset.name);
     download_file(&asset.browser_download_url, &tmp_path)?;
 
+    if settings::get().verify_updates {
+        if verbose {
+            println!("Verifying checksum...");
+        }
+        verify_sha256(&tmp_path, &asset.name, &latest.tag_name)?;
+    }
+
     let binary_path = extract_binary(&tmp_path, &tmp_dir)?;
     let current_exe = env::current_exe().context("Failed to get current executable path")?;
     replace_binary(&binary_path, &current_exe)?;
@@ -139,8 +146,9 @@ fn get_target() -> String {
 }
 
 fn download_file(url: &str, path: &Path) -> Result<()> {
+    let path_str = path.to_str().context("path contains invalid UTF-8")?;
     let output = std::process::Command::new("curl")
-        .args(["-fsSL", "-o", path.to_str().unwrap(), url])
+        .args(["-fsSL", "-o", path_str, url])
         .output()
         .context("Failed to run curl")?;
 
@@ -152,12 +160,17 @@ fn download_file(url: &str, path: &Path) -> Result<()> {
 }
 
 fn extract_binary(archive: &Path, dest: &Path) -> Result<PathBuf> {
-    let archive_str = archive.to_str().unwrap();
+    let archive_str = archive
+        .to_str()
+        .context("archive path contains invalid UTF-8")?;
+    let dest_str = dest
+        .to_str()
+        .context("destination path contains invalid UTF-8")?;
 
     if archive_str.ends_with(".tar.gz") {
         // Unix: extract tar.gz
         let output = std::process::Command::new("tar")
-            .args(["-xzf", archive_str, "-C", dest.to_str().unwrap()])
+            .args(["-xzf", archive_str, "-C", dest_str])
             .output()
             .context("Failed to extract archive")?;
 
@@ -175,8 +188,7 @@ fn extract_binary(archive: &Path, dest: &Path) -> Result<PathBuf> {
                     "-Command",
                     &format!(
                         "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
-                        archive_str,
-                        dest.to_str().unwrap()
+                        archive_str, dest_str
                     ),
                 ])
                 .output()
@@ -190,6 +202,65 @@ fn extract_binary(archive: &Path, dest: &Path) -> Result<PathBuf> {
         Ok(dest.join("kyle.exe"))
     } else {
         anyhow::bail!("Unknown archive format: {}", archive_str);
+    }
+}
+
+fn verify_sha256(archive_path: &Path, asset_name: &str, version: &str) -> Result<()> {
+    let url = format!("https://github.com/{REPO}/releases/download/{version}/SHA256SUMS",);
+
+    let output = std::process::Command::new("curl")
+        .args(["-fsSL", &url])
+        .output()
+        .context("failed to download SHA256SUMS")?;
+
+    if !output.status.success() {
+        anyhow::bail!("failed to download SHA256SUMS from release");
+    }
+
+    let checksums = String::from_utf8_lossy(&output.stdout);
+
+    let expected = checksums
+        .lines()
+        .find(|line| line.contains(asset_name))
+        .context("asset not found in SHA256SUMS")?
+        .split_whitespace()
+        .next()
+        .context("invalid SHA256SUMS format")?;
+
+    let actual = compute_sha256(archive_path)?;
+
+    if expected != actual {
+        anyhow::bail!("SHA256 mismatch: expected {expected}, got {actual}");
+    }
+
+    Ok(())
+}
+
+fn compute_sha256(path: &Path) -> Result<String> {
+    #[cfg(unix)]
+    {
+        let path_str = path.to_str().context("path contains invalid UTF-8")?;
+        let output = std::process::Command::new("sha256sum")
+            .arg(path_str)
+            .output()
+            .context("failed to compute SHA256")?;
+        let hash = String::from_utf8_lossy(&output.stdout);
+        Ok(hash.split_whitespace().next().unwrap_or("").to_string())
+    }
+
+    #[cfg(windows)]
+    {
+        let output = std::process::Command::new("powershell")
+            .args([
+                "-Command",
+                &format!(
+                    "(Get-FileHash -Algorithm SHA256 '{}').Hash.ToLower()",
+                    path.display()
+                ),
+            ])
+            .output()
+            .context("failed to compute SHA256")?;
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 }
 

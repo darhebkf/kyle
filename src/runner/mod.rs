@@ -91,11 +91,16 @@ impl Runner {
 
             if dep_ref.is_namespaced() {
                 // Cross-namespace dependency
-                self.run_namespaced(&dep_ref.namespace.unwrap(), &dep_ref.task_name)
-                    .map_err(|e| Error::DependencyFailed {
-                        dep: dep.clone(),
-                        source: Box::new(e),
-                    })?;
+                self.run_namespaced(
+                    &dep_ref
+                        .namespace
+                        .expect("invariant: is_namespaced() guarantees namespace is Some"),
+                    &dep_ref.task_name,
+                )
+                .map_err(|e| Error::DependencyFailed {
+                    dep: dep.clone(),
+                    source: Box::new(e),
+                })?;
             } else {
                 // Local dependency
                 self.run(dep, &[]).map_err(|e| Error::DependencyFailed {

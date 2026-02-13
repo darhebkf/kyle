@@ -1,0 +1,96 @@
+import { Callout } from 'nextra/components'
+
+# CLI Reference
+
+## Commands
+
+### `kyle`
+
+List all available tasks in the current directory.
+
+```bash
+kyle
+```
+
+### `kyle <task> [args...]`
+
+Run a task. Extra arguments are passed through to the command.
+
+```bash
+kyle build
+kyle test --verbose
+kyle build -- --release --target x86_64
+```
+
+### `kyle init [name] [--yaml|--toml]`
+
+Create a new Kylefile in the current directory.
+
+```bash
+kyle init                  # Create with default format
+kyle init my-project       # Create with project name
+kyle init --yaml           # Force YAML format
+kyle init my-project --toml  # TOML with project name
+```
+
+### `kyle upgrade`
+
+Check for updates and upgrade Kyle to the latest version.
+
+```bash
+kyle upgrade
+```
+
+<Callout type="info">
+Downloads are verified with SHA256 checksums by default. Disable with `kyle config set verify_updates false`.
+</Callout>
+
+### `kyle config`
+
+Manage Kyle settings.
+
+```bash
+kyle config list                     # Show all settings
+kyle config get <key>                # Get a setting
+kyle config set <key> <value>        # Set a setting
+kyle config path                     # Show config file path
+```
+
+### `kyle completions <shell>`
+
+Generate shell completions for tab completion.
+
+```bash
+kyle completions bash >> ~/.bashrc
+kyle completions zsh >> ~/.zshrc
+kyle completions fish > ~/.config/fish/completions/kyle.fish
+```
+
+### `kyle version`
+
+Print the current version.
+
+```bash
+kyle version
+kyle -v
+kyle --version
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `-v`, `--version` | Print version |
+| `-h`, `--help` | Print help |
+
+## Settings
+
+Managed via `kyle config set <key> <value>`:
+
+| Key | Values | Default | Description |
+|-----|--------|---------|-------------|
+| `default_format` | `toml`, `yaml` | `toml` | Format used by `kyle init` |
+| `auto_upgrade` | `true`, `false` | `false` | Auto-check for updates on every run |
+| `verify_updates` | `true`, `false` | `true` | Verify SHA256 checksums on upgrade |
+
+Config is stored at `~/.config/kyle/config.toml`.

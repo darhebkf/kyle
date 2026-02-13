@@ -1,6 +1,6 @@
 # Kyle
 
-> A simple, extensible task runner for any project.
+> A simple, extensible polyglot task runner for any project.
 
 Kyle is a command-line task runner that reads task definitions from a `Kylefile` and executes them. Similar to `make` or `just`, but with YAML/TOML configuration and a focus on simplicity/DX.
 

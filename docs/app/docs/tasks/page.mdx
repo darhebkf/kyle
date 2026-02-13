@@ -1,0 +1,109 @@
+import { Callout } from 'nextra/components'
+
+# Tasks
+
+Tasks are the core of Kyle. Each task has a shell command to run, and optionally dependencies and a description.
+
+## Running Tasks
+
+```bash
+kyle build          # Run a single task
+kyle test           # Run task and its dependencies
+kyle                # List all available tasks
+```
+
+## Dependencies
+
+Tasks can depend on other tasks. Dependencies run first, in order:
+
+```toml filename="Kylefile"
+# kyle: toml
+
+[tasks.clean]
+run = "rm -rf dist/"
+
+[tasks.build]
+run = "npm run build"
+deps = ["clean"]
+
+[tasks.deploy]
+run = "./deploy.sh"
+deps = ["build"]
+```
+
+Running `kyle deploy` executes: `clean` -> `build` -> `deploy`.
+
+Dependencies are only run once per invocation, even if multiple tasks depend on the same task.
+
+## Argument Passthrough
+
+Extra arguments after the task name are passed through to the command:
+
+```bash
+kyle build --release
+```
+
+If the `build` task is `run = "cargo build"`, Kyle executes `cargo build --release`.
+
+You can also use `--` to separate Kyle arguments from task arguments:
+
+```bash
+kyle test -- --verbose --filter=auth
+```
+
+## Cross-namespace Dependencies
+
+Tasks can depend on tasks in other namespaces:
+
+```toml filename="Kylefile"
+# kyle: toml
+
+[tasks.deploy]
+desc = "Deploy everything"
+run = "echo deploying"
+deps = ["backend:build", "frontend:build"]
+```
+
+See [Namespaces](/docs/namespaces) for more on cross-namespace workflows.
+
+## Task Descriptions
+
+The `desc` field is shown when listing tasks:
+
+```toml
+[tasks.build]
+desc = "Build the project"
+run = "cargo build --release"
+
+[tasks.test]
+run = "cargo test"
+```
+
+```bash
+$ kyle
+Available tasks:
+  build    Build the project
+  test
+```
+
+Tasks without a description still appear in the list, just without a label.
+
+<Callout type="info">
+When Kyle falls back to a Makefile or justfile, it parses comments above targets as descriptions.
+</Callout>
+
+## Makefile and Justfile Compatibility
+
+Kyle can run tasks from existing Makefiles and justfiles without any migration:
+
+```bash
+# In a directory with a Makefile
+kyle build    # runs: make build
+
+# In a directory with a justfile
+kyle test     # runs: just test
+```
+
+Kyle parses these files natively — it doesn't shell out to `make` or `just`. This means it understands targets, dependencies, and descriptions.
+
+If both a Kylefile and a Makefile exist, the Kylefile takes priority.

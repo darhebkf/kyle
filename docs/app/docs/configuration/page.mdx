@@ -1,0 +1,71 @@
+import { Callout } from 'nextra/components'
+
+# Configuration
+
+Kyle stores user settings in `~/.config/kyle/config.toml`.
+
+## Managing Settings
+
+```bash
+kyle config list              # Show all settings and values
+kyle config get <key>         # Get a single setting
+kyle config set <key> <value> # Set a setting
+kyle config path              # Show config file path
+```
+
+## Available Settings
+
+### `default_format`
+
+The file format used when running `kyle init`.
+
+| Value | Description |
+|-------|-------------|
+| `toml` | TOML format (default) |
+| `yaml` | YAML format |
+
+```bash
+kyle config set default_format yaml
+```
+
+### `auto_upgrade`
+
+Automatically check for and install Kyle updates on every run.
+
+| Value | Description |
+|-------|-------------|
+| `false` | Disabled (default) |
+| `true` | Check for updates on every command |
+
+```bash
+kyle config set auto_upgrade true
+```
+
+<Callout type="warning">
+Auto-upgrade adds a small delay to every command while it checks for updates. For most users, running `kyle upgrade` manually is preferred.
+</Callout>
+
+### `verify_updates`
+
+Verify SHA256 checksums when downloading updates via `kyle upgrade`.
+
+| Value | Description |
+|-------|-------------|
+| `true` | Verify checksums (default) |
+| `false` | Skip verification |
+
+```bash
+kyle config set verify_updates false
+```
+
+## Config File Format
+
+The config file is plain TOML:
+
+```toml filename="~/.config/kyle/config.toml"
+default_format = "toml"
+auto_upgrade = false
+verify_updates = true
+```
+
+You can edit it directly if you prefer.

@@ -1,0 +1,104 @@
+import { Callout } from 'nextra/components'
+
+# Namespaces
+
+Namespaces let you run tasks in subdirectories. This is useful for monorepos and multi-project setups.
+
+## Basic Usage
+
+Use `:` or `.` to separate the namespace from the task:
+
+```bash
+kyle backend:build      # Run build in ./backend/
+kyle frontend:test      # Run test in ./frontend/
+kyle backend.build      # Dot syntax works too
+```
+
+Kyle looks for a Kylefile (or Makefile/justfile) in the subdirectory and runs the task there.
+
+## Auto-discovery
+
+Kyle automatically discovers namespaces from subdirectories that contain task files:
+
+```
+my-monorepo/
+├── Kylefile              # Root tasks
+├── backend/
+│   └── Kylefile          # backend:* tasks
+├── frontend/
+│   └── Makefile          # frontend:* tasks (Makefile fallback)
+└── services/
+    └── api/
+        └── justfile      # services/api:* tasks
+```
+
+```bash
+$ kyle
+Available tasks:
+  build    Build the project
+
+Discovered namespaces:
+  backend:
+  frontend: (Makefile)
+  services/api: (justfile)
+```
+
+<Callout type="info">
+Namespaces are discovered from immediate subdirectories. Deeply nested projects like `services/api` use path syntax with `/`.
+</Callout>
+
+## Nested Namespaces
+
+For deeper directory structures, use `/` in the namespace:
+
+```bash
+kyle services/api:build
+kyle apps/mobile:dev
+```
+
+## Explicit Includes
+
+You can explicitly register namespaces with aliases using `includes`:
+
+```toml filename="Kylefile"
+# kyle: toml
+name = "monorepo"
+
+[includes]
+api = "services/backend-api"
+web = "apps/web-frontend"
+```
+
+Now you can use the short alias:
+
+```bash
+kyle api:build      # Runs build in ./services/backend-api/
+kyle web:dev        # Runs dev in ./apps/web-frontend/
+```
+
+## Cross-namespace Dependencies
+
+Tasks can depend on tasks in other namespaces:
+
+```toml filename="Kylefile"
+# kyle: toml
+
+[tasks.deploy]
+desc = "Build and deploy everything"
+run = "./deploy.sh"
+deps = ["backend:build", "frontend:build"]
+```
+
+Running `kyle deploy` will:
+1. Run `build` in `./backend/`
+2. Run `build` in `./frontend/`
+3. Run `./deploy.sh` in the root
+
+## How It Works
+
+When you run `kyle backend:build`:
+
+1. Kyle parses the namespace (`backend`) and task (`build`)
+2. Resolves the directory (`./backend/`)
+3. Loads the Kylefile (or Makefile/justfile) from that directory
+4. Runs the task with the subdirectory as the working directory

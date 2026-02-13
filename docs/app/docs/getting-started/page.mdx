@@ -1,0 +1,109 @@
+import { Tabs, Callout } from 'nextra/components'
+
+# Getting Started
+
+Install Kyle and create your first Kylefile.
+
+## Installation
+
+<Tabs items={['Linux/macOS', 'Windows', 'From Source']}>
+  <Tabs.Tab>
+```bash
+curl -fsSL https://kylefile.dev/install.sh | sh
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```powershell
+irm https://kylefile.dev/install.ps1 | iex
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+cargo build --release
+mv target/release/kyle ~/.local/bin/
+```
+  </Tabs.Tab>
+</Tabs>
+
+## Verify Installation
+
+```bash
+kyle --version
+```
+
+## Create a Kylefile
+
+Run `kyle init` in your project directory:
+
+```bash
+kyle init my-project
+```
+
+This creates a `Kylefile` with a starter template:
+
+```toml filename="Kylefile"
+# kyle: toml
+name = "my-project"
+
+[tasks.hello]
+desc = "Say hello"
+run = "echo Hello from Kyle!"
+```
+
+<Callout type="info">
+By default, `kyle init` creates a TOML file. Use `kyle init --yaml` for YAML format.
+</Callout>
+
+## Run a Task
+
+```bash
+kyle hello
+```
+
+Output:
+```
+Hello from Kyle!
+```
+
+## List Tasks
+
+Running `kyle` with no arguments lists all available tasks:
+
+```bash
+kyle
+```
+
+```
+Available tasks:
+  hello    Say hello
+```
+
+## Shell Completions
+
+Enable tab completion for your shell:
+
+<Tabs items={['Bash', 'Zsh', 'Fish']}>
+  <Tabs.Tab>
+```bash
+kyle completions bash >> ~/.bashrc
+source ~/.bashrc
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+kyle completions zsh >> ~/.zshrc
+source ~/.zshrc
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+kyle completions fish > ~/.config/fish/completions/kyle.fish
+```
+  </Tabs.Tab>
+</Tabs>
+
+## Next Steps
+
+- [Kylefiles](/docs/kylefiles) — YAML and TOML format reference
+- [Tasks](/docs/tasks) — Dependencies, arguments, multi-line commands
+- [Namespaces](/docs/namespaces) — Run tasks across subdirectories

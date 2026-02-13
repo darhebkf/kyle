@@ -1,0 +1,59 @@
+# Introduction
+
+**Kyle** is a fast, polyglot task runner for any project. Define tasks in a `Kylefile` and run them with `kyle <task>`.
+
+## Why Kyle?
+
+- **Polyglot** — Supports YAML and TOML out of the box, with more formats coming
+- **Zero migration** — Works with existing Makefiles and Justfiles automatically
+- **Namespaces** — Run tasks across subdirectories with `kyle backend:build`
+- **Fast** — Written in Rust, starts instantly
+- **Cross-platform** — Linux, macOS, and Windows
+
+## Quick Example
+
+```toml filename="Kylefile"
+# kyle: toml
+name = "my-project"
+
+[tasks.build]
+desc = "Build the project"
+run = "cargo build --release"
+
+[tasks.test]
+desc = "Run tests"
+run = "cargo test"
+deps = ["build"]
+```
+
+```bash
+kyle          # List available tasks
+kyle build    # Run the build task
+kyle test     # Runs build first, then test
+```
+
+## Zero Config
+
+Kyle auto-detects existing project files. No migration needed:
+
+```bash
+# Have a Makefile? Just works.
+kyle build    # runs make build
+
+# Have a justfile? Just works.
+kyle test     # runs just test
+```
+
+Kyle checks for files in this order:
+1. `Kylefile` (YAML/TOML)
+2. `Makefile`
+3. `justfile`
+
+If you add a `Kylefile`, it takes priority — your existing files stay untouched.
+
+## Next Steps
+
+- [Getting Started](/docs/getting-started) — Install Kyle
+- [Kylefiles](/docs/kylefiles) — Learn the Kylefile format
+- [Tasks](/docs/tasks) — Dependencies, arguments, and more
+- [Namespaces](/docs/namespaces) — Monorepo support

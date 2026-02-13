@@ -1,0 +1,154 @@
+import { Tabs, Callout } from 'nextra/components'
+
+# Kylefiles
+
+A Kylefile defines your project's tasks. Kyle supports both TOML and YAML formats.
+
+## Format Detection
+
+Kyle detects the format automatically based on the file:
+
+| File | Format |
+|------|--------|
+| `Kylefile` | Detected by header (`# kyle: toml` or `# kyle: yaml`), defaults to YAML |
+| `Kylefile.toml` | TOML |
+| `Kylefile.yaml` | YAML |
+| `Kylefile.yml` | YAML |
+
+<Callout type="info">
+Set your preferred default format with `kyle config set default_format toml`.
+</Callout>
+
+## Schema
+
+<Tabs items={['TOML', 'YAML']}>
+  <Tabs.Tab>
+```toml filename="Kylefile"
+# kyle: toml
+name = "project-name"     # Optional
+
+[tasks.task-name]
+desc = "Description"      # Optional - shown in task list
+run = "shell command"     # Required - command to execute
+deps = ["other-task"]     # Optional - run these first
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```yaml filename="Kylefile"
+name: project-name          # Optional
+
+tasks:
+  task-name:
+    desc: Description        # Optional - shown in task list
+    run: shell command       # Required - command to execute
+    deps: [other-task]       # Optional - run these first
+```
+  </Tabs.Tab>
+</Tabs>
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | No | Project name, shown in output |
+| `tasks` | Yes | Map of task definitions |
+| `tasks.<name>.run` | Yes | Shell command to execute |
+| `tasks.<name>.desc` | No | Description shown in `kyle` task list |
+| `tasks.<name>.deps` | No | List of task names to run before this task |
+
+## TOML Format
+
+```toml filename="Kylefile"
+# kyle: toml
+name = "my-app"
+
+[tasks.build]
+desc = "Build the project"
+run = "cargo build --release"
+
+[tasks.test]
+desc = "Run tests"
+run = "cargo test"
+deps = ["build"]
+
+[tasks.clean]
+desc = "Clean build artifacts"
+run = "rm -rf target/"
+```
+
+## YAML Format
+
+```yaml filename="Kylefile.yaml"
+name: my-app
+
+tasks:
+  build:
+    desc: Build the project
+    run: cargo build --release
+
+  test:
+    desc: Run tests
+    run: cargo test
+    deps: [build]
+
+  clean:
+    desc: Clean build artifacts
+    run: rm -rf target/
+```
+
+## Multi-line Commands
+
+<Tabs items={['TOML', 'YAML']}>
+  <Tabs.Tab>
+```toml filename="Kylefile"
+# kyle: toml
+
+[tasks.setup]
+desc = "Set up the project"
+run = """
+npm install
+npm run build
+echo "Done!"
+"""
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```yaml filename="Kylefile"
+tasks:
+  setup:
+    desc: Set up the project
+    run: |
+      npm install
+      npm run build
+      echo "Done!"
+```
+  </Tabs.Tab>
+</Tabs>
+
+## File Detection Order
+
+When you run `kyle`, it looks for config files in this order:
+
+1. `Kylefile` (with format header)
+2. `Kylefile.yaml`
+3. `Kylefile.yml`
+4. `Kylefile.toml`
+5. `Makefile` / `makefile` / `GNUmakefile` (fallback)
+6. `justfile` / `Justfile` (fallback)
+
+The first match wins. A `Kylefile` always takes priority over Makefiles and justfiles.
+
+## Includes
+
+You can include tasks from other directories:
+
+```toml filename="Kylefile"
+# kyle: toml
+name = "monorepo"
+
+[includes]
+backend = "services/backend"
+frontend = "apps/frontend"
+```
+
+This registers `backend` and `frontend` as namespaces. See [Namespaces](/docs/namespaces) for details.

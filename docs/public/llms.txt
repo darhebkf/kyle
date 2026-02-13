@@ -1,0 +1,178 @@
+# Kyle
+
+A simple, polyglot task runner. Define tasks in a Kylefile and run them with `kyle <task>`.
+
+## Installation
+
+```bash
+curl -fsSL https://kylefile.dev/install.sh | sh
+```
+
+Windows:
+```powershell
+irm https://kylefile.dev/install.ps1 | iex
+```
+
+## Quick Start
+
+```toml
+# kyle: toml
+name = "my-project"
+
+[tasks.build]
+desc = "Build the project"
+run = "cargo build --release"
+
+[tasks.test]
+desc = "Run tests"
+run = "cargo test"
+deps = ["build"]
+```
+
+```bash
+kyle          # List tasks
+kyle build    # Run build
+kyle test     # Runs build first, then test
+```
+
+## Kylefile Schema
+
+### TOML
+
+```toml
+# kyle: toml
+name = "project-name"          # Optional
+
+[tasks.task-name]
+desc = "Description"           # Optional
+run = "shell command"          # Required
+deps = ["other-task"]          # Optional
+
+[includes]
+alias = "path/to/dir"         # Optional - register namespaces
+```
+
+### YAML
+
+```yaml
+name: project-name
+
+tasks:
+  task-name:
+    desc: Description
+    run: shell command
+    deps: [other-task]
+
+includes:
+  alias: path/to/dir
+```
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | No | Project name |
+| `tasks.<name>.run` | Yes | Shell command to execute |
+| `tasks.<name>.desc` | No | Description shown in task list |
+| `tasks.<name>.deps` | No | Tasks to run first |
+| `includes.<alias>` | No | Path to namespace directory |
+
+## File Detection Order
+
+1. `Kylefile` (format via `# kyle: toml` or `# kyle: yaml` header, defaults to YAML)
+2. `Kylefile.yaml`
+3. `Kylefile.yml`
+4. `Kylefile.toml`
+5. `Makefile` / `makefile` / `GNUmakefile` (fallback)
+6. `justfile` / `Justfile` (fallback)
+
+## Namespaces
+
+Run tasks in subdirectories:
+
+```bash
+kyle backend:build        # Run build in ./backend/
+kyle frontend:test        # Run test in ./frontend/
+kyle backend.build        # Dot separator also works
+kyle apps/mobile:dev      # Nested paths
+```
+
+Cross-namespace dependencies:
+
+```toml
+[tasks.deploy]
+deps = ["backend:build", "frontend:build"]
+run = "echo deploying"
+```
+
+Namespaces are auto-discovered from subdirectories containing Kylefiles, Makefiles, or justfiles.
+
+## CLI Reference
+
+```
+kyle                              List available tasks
+kyle <task> [args...]             Run a task (args passed through)
+kyle init [name] [--yaml|--toml]  Create a new Kylefile
+kyle upgrade                      Upgrade to latest version
+kyle config list                  Show all settings
+kyle config get <key>             Get a setting
+kyle config set <key> <value>     Set a setting
+kyle config path                  Show config file path
+kyle completions <shell>          Generate shell completions (bash, zsh, fish)
+kyle version                      Print version
+```
+
+## Settings
+
+| Key | Values | Default | Description |
+|-----|--------|---------|-------------|
+| `default_format` | `toml`, `yaml` | `toml` | Format for `kyle init` |
+| `auto_upgrade` | `true`, `false` | `false` | Auto-check for updates |
+| `verify_updates` | `true`, `false` | `true` | SHA256 verification on upgrade |
+
+Config stored at `~/.config/kyle/config.toml`.
+
+## Common Patterns
+
+### Multi-line commands
+
+```yaml
+tasks:
+  setup:
+    run: |
+      npm install
+      npm run build
+      echo "Done!"
+```
+
+### Task chains
+
+```toml
+[tasks.clean]
+run = "rm -rf dist/"
+
+[tasks.build]
+run = "npm run build"
+deps = ["clean"]
+
+[tasks.deploy]
+run = "./deploy.sh"
+deps = ["build"]
+```
+
+Running `kyle deploy` executes: clean -> build -> deploy.
+
+### Zero-config with existing files
+
+```bash
+# Makefile exists? Just works.
+kyle build    # runs make build
+
+# justfile exists? Just works.
+kyle test     # runs just test
+```
+
+## Links
+
+- Documentation: https://kylefile.dev
+- GitHub: https://github.com/darhebkf/kyle

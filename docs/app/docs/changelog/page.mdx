@@ -2,7 +2,19 @@
 
 All notable changes to Kyle are documented here.
 
-## 0.1.2 — 2025-02-08
+## 0.1.3 — 2026-02-13
+
+### Added
+- Shell completions (`kyle completions bash/zsh/fish`)
+- SHA256 checksum verification on `kyle upgrade`
+- `verify_updates` setting (default: true)
+- Documentation site with full guides
+- MCP server scaffold
+
+### Fixed
+- Replaced risky `unwrap()` calls with proper error handling in upgrade and runner
+
+## 0.1.2 — 2026-02-08
 
 ### Added
 - Dot (`.`) as alternative namespace separator (`kyle backend.build`)
@@ -11,7 +23,7 @@ All notable changes to Kyle are documented here.
 ### Fixed
 - Bug where tasks with colons in names (e.g., `test:rust`) were incorrectly resolved as namespaces
 
-## 0.1.1 — 2025-02-04
+## 0.1.1 — 2026-02-04
 
 ### Added
 - `kyle upgrade` command to manually check and upgrade to the latest version
@@ -20,7 +32,7 @@ All notable changes to Kyle are documented here.
 ### Changed
 - Updated install script URL to kylefile.dev
 
-## 0.1.0 — 2025-02-03
+## 0.1.0 — 2026-02-03
 
 ### Added
 - Initial release

@@ -17,24 +17,24 @@ const SKIP_DIRS: &[&str] = &[
     ".nuxt",
 ];
 
-const PROJECT_FILES: &[&str] = &[
-    "Kylefile",
-    "Kylefile.yaml",
-    "Kylefile.yml",
-    "Kylefile.toml",
-    "Makefile",
-    "makefile",
-    "GNUmakefile",
-    "justfile",
-    "Justfile",
-];
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FileType {
     Kylefile,
     Makefile,
     Justfile,
 }
+
+const PROJECT_FILES: &[(&str, FileType)] = &[
+    ("Kylefile", FileType::Kylefile),
+    ("Kylefile.yaml", FileType::Kylefile),
+    ("Kylefile.yml", FileType::Kylefile),
+    ("Kylefile.toml", FileType::Kylefile),
+    ("Makefile", FileType::Makefile),
+    ("makefile", FileType::Makefile),
+    ("GNUmakefile", FileType::Makefile),
+    ("justfile", FileType::Justfile),
+    ("Justfile", FileType::Justfile),
+];
 
 #[derive(Debug, Clone)]
 pub struct DiscoveredNamespace {
@@ -65,11 +65,9 @@ pub fn discover_namespaces(root: &Path) -> Vec<DiscoveredNamespace> {
         }
 
         let filename = entry.file_name().to_str().unwrap_or("");
-        if !PROJECT_FILES.contains(&filename) {
+        let Some(file_type) = detect_file_type(filename) else {
             continue;
-        }
-
-        let file_type = detect_file_type(filename);
+        };
         let dir = entry.path().parent().unwrap_or(entry.path());
 
         // Create alias from relative path
@@ -85,21 +83,17 @@ pub fn discover_namespaces(root: &Path) -> Vec<DiscoveredNamespace> {
         }
     }
 
-    // Sort by alias for consistent output
-    namespaces.sort_by(|a, b| a.alias.cmp(&b.alias));
-
-    // Deduplicate - keep only first file found per directory (Kylefile takes precedence)
+    namespaces.sort_by(|a, b| a.alias.cmp(&b.alias).then(a.file_type.cmp(&b.file_type)));
     namespaces.dedup_by(|a, b| a.alias == b.alias);
 
     namespaces
 }
 
-fn detect_file_type(filename: &str) -> FileType {
-    match filename {
-        "Makefile" | "makefile" | "GNUmakefile" => FileType::Makefile,
-        "justfile" | "Justfile" => FileType::Justfile,
-        _ => FileType::Kylefile,
-    }
+fn detect_file_type(filename: &str) -> Option<FileType> {
+    PROJECT_FILES
+        .iter()
+        .find(|(name, _)| *name == filename)
+        .map(|(_, ft)| ft.clone())
 }
 
 #[cfg(test)]

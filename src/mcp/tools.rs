@@ -1,3 +1,6 @@
+// TODO: implement MCP tools (list_tasks, run_task)
+#![allow(dead_code, unused_imports)]
+
 use std::path::PathBuf;
 
 use rmcp::ServerHandler;

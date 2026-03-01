@@ -2,6 +2,22 @@
 
 All notable changes to Kyle are documented here.
 
+## 0.1.5 — 2026-03-01 — Universal File Support
+
+### Added
+- Cycle detection in task dependency graphs with clear error messages (`a → b → a`)
+- package.json scripts support
+- composer.json scripts support
+- deno.json / deno.jsonc tasks support
+- Taskfile.yml (go-task) support
+- Rakefile support
+- pyproject.toml support (PDM, Hatch, Rye scripts; fallback to standard Python tasks)
+- Standard command generation for Cargo.toml, go.mod, pubspec.yaml, *.csproj, build.gradle, pom.xml, CMakeLists.txt
+- Namespace discovery for all new file types
+
+### Fixed
+- Local dependency executed_key bug in task runner
+
 ## 0.1.4 — 2026-03-01
 
 ### Added

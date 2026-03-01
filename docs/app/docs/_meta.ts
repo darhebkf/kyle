@@ -8,6 +8,7 @@ export default {
   tasks: "Tasks",
   namespaces: "Namespaces",
   cli: "CLI Reference",
+  mcp: "MCP Server",
   configuration: "Configuration",
   changelog: "Changelog",
   __: {

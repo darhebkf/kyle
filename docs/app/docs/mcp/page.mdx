@@ -1,0 +1,121 @@
+import { Tabs, Callout } from 'nextra/components'
+
+# MCP Server
+
+Kyle includes a built-in [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) server that lets AI tools discover and run your project's tasks automatically.
+
+With kyle globally scoped as an MCP server, AI tools instantly know every available task in any project — Rust, Node, Python, Go, monorepo — and can run them directly without guessing `npm run` vs `cargo` vs `make`.
+
+## Setup
+
+### Quick Setup
+
+Run the installer and select your AI client when prompted:
+
+```bash
+curl -fsSL https://kylefile.dev/install.sh | sh
+```
+
+### Manual Setup
+
+Get the MCP config JSON:
+
+```bash
+kyle mcp --config
+```
+
+This outputs:
+
+```json
+{
+  "mcpServers": {
+    "kyle": {
+      "command": "/home/you/.local/bin/kyle",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Then add this to your AI client's config file:
+
+<Tabs items={['Claude Code', 'Cursor', 'Windsurf']}>
+  <Tabs.Tab>
+
+Add to `~/.claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "kyle": {
+      "command": "kyle",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+
+Add to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "kyle": {
+      "command": "kyle",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "kyle": {
+      "command": "kyle",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+  </Tabs.Tab>
+</Tabs>
+
+<Callout type="info">
+Since kyle is configured globally, it works in every project — no per-project MCP setup needed.
+</Callout>
+
+## Tools
+
+The MCP server exposes two tools:
+
+### `list_tasks`
+
+Returns all available tasks in the current project directory, including:
+- Task names, descriptions, and dependencies
+- Source file type (Kylefile, Makefile, package.json, etc.)
+- Discovered namespace tasks from subdirectories
+
+### `run_task`
+
+Runs a task by name and returns the combined stdout/stderr output. Supports:
+- Simple tasks: `build`, `test`, `lint`
+- Namespaced tasks: `backend:build`, `frontend:test`
+- Full dependency resolution and cycle detection
+
+## How It Works
+
+1. Your AI tool connects to `kyle mcp` via stdio
+2. AI calls `list_tasks` to discover what's available
+3. AI calls `run_task` with the task name to execute it
+4. Kyle loads the appropriate task file, resolves dependencies, and runs the command
+5. Output is returned to the AI tool

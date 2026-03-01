@@ -1,6 +1,6 @@
 # Kyle
 
-A simple, polyglot task runner. Define tasks in a Kylefile and run them with `kyle <task>`.
+A universal task runner that speaks everyone's language. Define tasks in a Kylefile, or use existing Makefiles, justfiles, package.json, Cargo.toml, and more.
 
 ## Installation
 
@@ -77,14 +77,31 @@ includes:
 | `tasks.<name>.deps` | No | Tasks to run first |
 | `includes.<alias>` | No | Path to namespace directory |
 
-## File Detection Order
+## Supported Files
 
-1. `Kylefile` (format via `# kyle: toml` or `# kyle: yaml` header, defaults to YAML)
-2. `Kylefile.yaml`
-3. `Kylefile.yml`
-4. `Kylefile.toml`
-5. `Makefile` / `makefile` / `GNUmakefile` (fallback)
-6. `justfile` / `Justfile` (fallback)
+Kyle auto-detects and reads tasks from these files (in priority order):
+
+### Native
+- `Kylefile`, `Kylefile.toml`, `Kylefile.yaml`, `Kylefile.yml`
+
+### Parsed (scripts/tasks extracted from file content)
+- `Makefile`, `makefile`, `GNUmakefile` — make targets
+- `justfile`, `Justfile` — just recipes
+- `Taskfile.yml`, `Taskfile.yaml` — go-task tasks
+- `Rakefile` — Ruby rake tasks
+- `package.json` — npm scripts
+- `composer.json` — PHP composer scripts
+- `deno.json`, `deno.jsonc` — Deno tasks
+- `pyproject.toml` — PDM/Hatch/Rye scripts, or fallback Python tasks
+
+### Standard (common commands generated automatically)
+- `Cargo.toml` — build, test, run, check, clippy, fmt
+- `go.mod` — build, test, run, vet, fmt
+- `pubspec.yaml` — run, build, test, analyze, pub-get
+- `*.csproj` — build, test, run, publish, clean
+- `build.gradle`, `build.gradle.kts` — build, test, run, clean
+- `pom.xml` — compile, test, package, install, clean
+- `CMakeLists.txt` — configure, build, test, clean
 
 ## Namespaces
 
@@ -105,7 +122,41 @@ deps = ["backend:build", "frontend:build"]
 run = "echo deploying"
 ```
 
-Namespaces are auto-discovered from subdirectories containing Kylefiles, Makefiles, or justfiles.
+Namespaces are auto-discovered from subdirectories containing any supported task file.
+
+## MCP Server
+
+Kyle includes a built-in MCP server for AI tool integration.
+
+```bash
+kyle mcp              # Start MCP server (stdio)
+kyle mcp --config     # Print config JSON for AI clients
+```
+
+### Tools
+
+- `list_tasks` — Returns all tasks with names, descriptions, deps, source type, and namespace tasks
+- `run_task` — Runs a task by name (supports namespaced tasks), returns stdout/stderr
+
+### Setup
+
+Add to your AI client's MCP config:
+
+```json
+{
+  "mcpServers": {
+    "kyle": {
+      "command": "kyle",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Config file locations:
+- Claude Code: `~/.claude/claude_desktop_config.json`
+- Cursor: `~/.cursor/mcp.json`
+- Windsurf: `~/.codeium/windsurf/mcp_config.json`
 
 ## CLI Reference
 
@@ -114,6 +165,8 @@ kyle                              List available tasks
 kyle <task> [args...]             Run a task (args passed through)
 kyle init [name] [--yaml|--toml]  Create a new Kylefile
 kyle upgrade                      Upgrade to latest version
+kyle mcp                          Start MCP server
+kyle mcp --config                 Print MCP config JSON
 kyle config list                  Show all settings
 kyle config get <key>             Get a setting
 kyle config set <key> <value>     Set a setting
@@ -134,15 +187,12 @@ Config stored at `~/.config/kyle/config.toml`.
 
 ## Common Patterns
 
-### Multi-line commands
+### Zero-config with existing files
 
-```yaml
-tasks:
-  setup:
-    run: |
-      npm install
-      npm run build
-      echo "Done!"
+```bash
+# Any supported file just works:
+kyle build    # Cargo.toml? runs cargo build. Makefile? runs make build.
+kyle test     # package.json? runs npm run test. go.mod? runs go test.
 ```
 
 ### Task chains
@@ -161,16 +211,6 @@ deps = ["build"]
 ```
 
 Running `kyle deploy` executes: clean -> build -> deploy.
-
-### Zero-config with existing files
-
-```bash
-# Makefile exists? Just works.
-kyle build    # runs make build
-
-# justfile exists? Just works.
-kyle test     # runs just test
-```
 
 ## Links
 

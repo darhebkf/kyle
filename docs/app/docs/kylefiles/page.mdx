@@ -129,14 +129,30 @@ tasks:
 
 When you run `kyle`, it looks for config files in this order:
 
-1. `Kylefile` (with format header)
-2. `Kylefile.yaml`
-3. `Kylefile.yml`
-4. `Kylefile.toml`
-5. `Makefile` / `makefile` / `GNUmakefile` (fallback)
-6. `justfile` / `Justfile` (fallback)
+| Priority | File(s) | Type |
+|----------|---------|------|
+| 1 | `Kylefile`, `Kylefile.toml`, `Kylefile.yaml`, `Kylefile.yml` | Native |
+| 2 | `Makefile`, `makefile`, `GNUmakefile` | Fallback |
+| 3 | `justfile`, `Justfile` | Fallback |
+| 4 | `Taskfile.yml`, `Taskfile.yaml` | Fallback |
+| 5 | `Rakefile` | Fallback |
+| 6 | `package.json` | Fallback |
+| 7 | `composer.json` | Fallback |
+| 8 | `deno.json`, `deno.jsonc` | Fallback |
+| 9 | `pyproject.toml` | Fallback |
+| 10 | `Cargo.toml` | Standard |
+| 11 | `go.mod` | Standard |
+| 12 | `pubspec.yaml` | Standard |
+| 13 | `*.csproj` | Standard |
+| 14 | `build.gradle`, `build.gradle.kts` | Standard |
+| 15 | `pom.xml` | Standard |
+| 16 | `CMakeLists.txt` | Standard |
 
-The first match wins. A `Kylefile` always takes priority over Makefiles and justfiles.
+The first match wins. A Kylefile always takes priority.
+
+**Fallback** files have their scripts/tasks parsed from the file content (e.g., `scripts` from package.json, `tasks` from Taskfile.yml).
+
+**Standard** files generate common commands automatically (e.g., `Cargo.toml` gives you `build`, `test`, `run`, `check`, `clippy`, `fmt`).
 
 ## Includes
 

@@ -14,22 +14,24 @@ kyle frontend:test      # Run test in ./frontend/
 kyle backend.build      # Dot syntax works too
 ```
 
-Kyle looks for a Kylefile (or Makefile/justfile) in the subdirectory and runs the task there.
+Kyle looks for any supported task file in the subdirectory and runs the task there.
 
 ## Auto-discovery
 
-Kyle automatically discovers namespaces from subdirectories that contain task files:
+Kyle automatically discovers namespaces from subdirectories that contain any supported task file:
 
 ```
 my-monorepo/
 ├── Kylefile              # Root tasks
 ├── backend/
-│   └── Kylefile          # backend:* tasks
+│   └── Cargo.toml        # backend:* tasks (build, test, run, ...)
 ├── frontend/
-│   └── Makefile          # frontend:* tasks (Makefile fallback)
+│   └── package.json      # frontend:* tasks (npm scripts)
+├── api/
+│   └── go.mod            # api:* tasks (build, test, run, ...)
 └── services/
-    └── api/
-        └── justfile      # services/api:* tasks
+    └── worker/
+        └── Makefile      # services/worker:* tasks
 ```
 
 ```bash
@@ -38,9 +40,10 @@ Available tasks:
   build    Build the project
 
 Discovered namespaces:
-  backend:
-  frontend: (Makefile)
-  services/api: (justfile)
+  api: (go.mod)
+  backend: (Cargo.toml)
+  frontend: (package.json)
+  services/worker: (Makefile)
 ```
 
 <Callout type="info">
@@ -100,5 +103,5 @@ When you run `kyle backend:build`:
 
 1. Kyle parses the namespace (`backend`) and task (`build`)
 2. Resolves the directory (`./backend/`)
-3. Loads the Kylefile (or Makefile/justfile) from that directory
+3. Loads the task file (Kylefile, Makefile, package.json, etc.) from that directory
 4. Runs the task with the subdirectory as the working directory

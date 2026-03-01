@@ -91,6 +91,73 @@ function Install-Kyle {
             Write-Info "Shell completions added to $profilePath"
         }
 
+        # MCP setup prompt
+        Write-Host ""
+        $mcpSetup = Read-Host "Set up MCP for AI tools? [y/N]"
+        if ($mcpSetup -eq "y" -or $mcpSetup -eq "Y") {
+            Write-Host ""
+            Write-Host "  1) Claude Code"
+            Write-Host "  2) Cursor"
+            Write-Host "  3) Windsurf"
+            Write-Host "  4) Skip"
+            Write-Host ""
+            $client = Read-Host "Select AI client [1-4]"
+
+            $mcpConfig = @{
+                mcpServers = @{
+                    kyle = @{
+                        command = $exePath
+                        args = @("mcp")
+                    }
+                }
+            } | ConvertTo-Json -Depth 4
+
+            switch ($client) {
+                "1" {
+                    $ccDir = "$env:USERPROFILE\.claude"
+                    $ccFile = "$ccDir\claude_desktop_config.json"
+                    if (Test-Path $ccFile) {
+                        Write-Warn "$ccFile already exists - add kyle MCP manually:"
+                        Write-Host ""
+                        Write-Host "  $exePath mcp --config"
+                    } else {
+                        New-Item -ItemType Directory -Path $ccDir -Force | Out-Null
+                        $mcpConfig | Out-File -FilePath $ccFile -Encoding utf8
+                        Write-Info "MCP config written to $ccFile"
+                    }
+                }
+                "2" {
+                    $cursorDir = "$env:USERPROFILE\.cursor"
+                    $cursorFile = "$cursorDir\mcp.json"
+                    if (Test-Path $cursorFile) {
+                        Write-Warn "$cursorFile already exists - add kyle MCP manually:"
+                        Write-Host ""
+                        Write-Host "  $exePath mcp --config"
+                    } else {
+                        New-Item -ItemType Directory -Path $cursorDir -Force | Out-Null
+                        $mcpConfig | Out-File -FilePath $cursorFile -Encoding utf8
+                        Write-Info "MCP config written to $cursorFile"
+                    }
+                }
+                "3" {
+                    $wsDir = "$env:USERPROFILE\.codeium\windsurf"
+                    $wsFile = "$wsDir\mcp_config.json"
+                    if (Test-Path $wsFile) {
+                        Write-Warn "$wsFile already exists - add kyle MCP manually:"
+                        Write-Host ""
+                        Write-Host "  $exePath mcp --config"
+                    } else {
+                        New-Item -ItemType Directory -Path $wsDir -Force | Out-Null
+                        $mcpConfig | Out-File -FilePath $wsFile -Encoding utf8
+                        Write-Info "MCP config written to $wsFile"
+                    }
+                }
+                default {
+                    Write-Info "Skipped MCP setup. Run 'kyle mcp --config' anytime to get the config."
+                }
+            }
+        }
+
         Write-Host ""
         Write-Host "✓ " -ForegroundColor Green -NoNewline
         Write-Host "kyle $version installed successfully!"

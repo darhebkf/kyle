@@ -156,6 +156,68 @@ install() {
         fi
     fi
 
+    # MCP setup prompt
+    echo ""
+    printf "Set up MCP for AI tools? [y/N] "
+    read -r answer
+    if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+        echo ""
+        echo "  1) Claude Code"
+        echo "  2) Cursor"
+        echo "  3) Windsurf"
+        echo "  4) Skip"
+        echo ""
+        printf "Select AI client [1-4]: "
+        read -r client
+
+        local mcp_config='{"mcpServers":{"kyle":{"command":"'$INSTALL_DIR'/kyle","args":["mcp"]}}}'
+
+        case "$client" in
+            1)
+                local cc_dir="$HOME/.claude"
+                mkdir -p "$cc_dir"
+                local cc_file="$cc_dir/claude_desktop_config.json"
+                if [ -f "$cc_file" ]; then
+                    warn "$cc_file already exists — add kyle MCP manually:"
+                    echo ""
+                    echo "  $INSTALL_DIR/kyle mcp --config"
+                else
+                    echo "$mcp_config" > "$cc_file"
+                    info "MCP config written to $cc_file"
+                fi
+                ;;
+            2)
+                local cursor_dir="$HOME/.cursor"
+                mkdir -p "$cursor_dir"
+                local cursor_file="$cursor_dir/mcp.json"
+                if [ -f "$cursor_file" ]; then
+                    warn "$cursor_file already exists — add kyle MCP manually:"
+                    echo ""
+                    echo "  $INSTALL_DIR/kyle mcp --config"
+                else
+                    echo "$mcp_config" > "$cursor_file"
+                    info "MCP config written to $cursor_file"
+                fi
+                ;;
+            3)
+                local ws_dir="$HOME/.codeium/windsurf"
+                mkdir -p "$ws_dir"
+                local ws_file="$ws_dir/mcp_config.json"
+                if [ -f "$ws_file" ]; then
+                    warn "$ws_file already exists — add kyle MCP manually:"
+                    echo ""
+                    echo "  $INSTALL_DIR/kyle mcp --config"
+                else
+                    echo "$mcp_config" > "$ws_file"
+                    info "MCP config written to $ws_file"
+                fi
+                ;;
+            *)
+                info "Skipped MCP setup. Run 'kyle mcp --config' anytime to get the config."
+                ;;
+        esac
+    fi
+
     echo ""
     printf "${GREEN}✓${NC} kyle $version installed successfully!\n"
     echo ""

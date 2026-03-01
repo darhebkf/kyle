@@ -12,3 +12,22 @@ pub async fn serve() -> anyhow::Result<()> {
     service.waiting().await?;
     Ok(())
 }
+
+pub fn print_config() -> anyhow::Result<()> {
+    let kyle_path = std::env::current_exe()
+        .unwrap_or_else(|_| std::path::PathBuf::from("kyle"))
+        .to_string_lossy()
+        .to_string();
+
+    let config = serde_json::json!({
+        "mcpServers": {
+            "kyle": {
+                "command": kyle_path,
+                "args": ["mcp"]
+            }
+        }
+    });
+
+    println!("{}", serde_json::to_string_pretty(&config)?);
+    Ok(())
+}

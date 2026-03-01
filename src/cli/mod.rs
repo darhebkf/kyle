@@ -78,8 +78,12 @@ enum Command {
     /// Upgrade kyle to the latest version (duh)
     Upgrade,
 
-    /// Start MCP server (used by AI clients, not run manually)
-    Mcp,
+    /// MCP server for AI tools
+    Mcp {
+        /// Print MCP config JSON for AI clients
+        #[arg(long)]
+        config: bool,
+    },
 
     /// Generate shell completions
     Completions {
@@ -137,7 +141,13 @@ pub fn run() -> Result<()> {
             Ok(())
         }
         Some(Command::Upgrade) => upgrade::run(),
-        Some(Command::Mcp) => tokio::runtime::Runtime::new()?.block_on(crate::mcp::serve()),
+        Some(Command::Mcp { config }) => {
+            if config {
+                crate::mcp::print_config()
+            } else {
+                tokio::runtime::Runtime::new()?.block_on(crate::mcp::serve())
+            }
+        }
         Some(Command::Completions { shell }) => completions::run(&shell),
         None => run_tasks(cli.task.as_deref(), &cli.args),
     }

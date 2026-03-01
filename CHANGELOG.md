@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-03-01 — MCP Client Support
+
+### Added
+
+- MCP setup for Codex (OpenAI), Antigravity (Google), and GitHub Copilot in install scripts
+- Install script "Other / manual" option with config instructions for all clients
+
+### Changed
+
+- MCP docs page expanded to 7 client tabs (Claude Code, Claude Desktop, Cursor, Windsurf, Codex, Antigravity, GitHub Copilot)
+- Updated llms.txt with all MCP client config formats
+
 ## [0.1.6] - 2026-03-01 — MCP Server
 
 ### Added
@@ -103,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Install scripts for Unix and Windows
 - CI/CD with GitHub Actions
 
+[0.1.7]: https://github.com/darhebkf/kyle/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/darhebkf/kyle/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/darhebkf/kyle/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/darhebkf/kyle/compare/v0.1.3...v0.1.4

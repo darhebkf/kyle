@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-03-01 — MCP Server
+
+### Added
+
+- MCP server with `list_tasks` and `run_task` tools for AI client integration
+- `kyle mcp --config` command to print MCP config JSON for AI clients
+- MCP setup prompt in install scripts (Claude Code, Cursor, Windsurf)
+- MCP documentation page
+
+### Changed
+
+- Install scripts (sh + ps1) at repo root are now symlinks to `docs/public/`
+- Updated docs: kylefiles page with all 16 supported file types, namespaces page, CLI reference
+- Updated llms.txt and AGENTS.md with full file support and MCP tools
+
 ## [0.1.5] - 2026-03-01 — Universal File Support
 
 ### Added
@@ -88,6 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Install scripts for Unix and Windows
 - CI/CD with GitHub Actions
 
+[0.1.6]: https://github.com/darhebkf/kyle/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/darhebkf/kyle/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/darhebkf/kyle/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/darhebkf/kyle/compare/v0.1.2...v0.1.3

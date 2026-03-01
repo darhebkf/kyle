@@ -14,6 +14,16 @@ use std::path::Path;
 
 const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
+pub const RESERVED_COMMANDS: &[&str] = &[
+    "init",
+    "config",
+    "version",
+    "upgrade",
+    "mcp",
+    "completions",
+    "help",
+];
+
 #[derive(Parser)]
 #[command(name = "kyle", about = "kyle - task runner")]
 #[command(version = VERSION)]
@@ -33,6 +43,10 @@ pub struct Cli {
     /// Print version
     #[arg(short = 'v', long = "version", action = clap::ArgAction::Version)]
     version: (),
+
+    /// Print task names (used by completion scripts)
+    #[arg(long, hide = true)]
+    summary: bool,
 }
 
 #[derive(Subcommand)]
@@ -102,6 +116,10 @@ pub fn run() -> Result<()> {
 
     let cli = Cli::parse();
 
+    if cli.summary {
+        return print_summary();
+    }
+
     match cli.command {
         Some(Command::Init { name, yaml, toml }) => {
             let format = if yaml {
@@ -123,6 +141,17 @@ pub fn run() -> Result<()> {
         Some(Command::Completions { shell }) => completions::run(&shell),
         None => run_tasks(cli.task.as_deref(), &cli.args),
     }
+}
+
+fn print_summary() -> Result<()> {
+    if let Ok((kf, _)) = kylefile_config::load("") {
+        for name in kf.tasks.keys() {
+            if !RESERVED_COMMANDS.contains(&name.as_str()) {
+                println!("{name}");
+            }
+        }
+    }
+    Ok(())
 }
 
 fn run_tasks(task: Option<&str>, args: &[String]) -> Result<()> {

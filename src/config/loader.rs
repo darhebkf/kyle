@@ -1,6 +1,8 @@
 use super::format::Format;
 use super::kylefile::Kylefile;
 use super::{Error, justfile, makefile};
+use crate::cli::RESERVED_COMMANDS;
+use crate::output;
 use crate::settings;
 use std::fs;
 use std::path::Path;
@@ -108,7 +110,19 @@ fn load_file(path: &Path) -> Result<(Kylefile, Source), Error> {
         }
     };
 
-    Ok((format.parse(&content)?, Source::Kylefile))
+    let kylefile = format.parse(&content)?;
+    warn_reserved_tasks(&kylefile);
+    Ok((kylefile, Source::Kylefile))
+}
+
+fn warn_reserved_tasks(kylefile: &Kylefile) {
+    for name in kylefile.tasks.keys() {
+        if RESERVED_COMMANDS.contains(&name.as_str()) {
+            output::warn(&format!(
+                "task '{name}' shadows a built-in command and will be ignored — rename it or use a namespace"
+            ));
+        }
+    }
 }
 
 fn detect_format_from_header(content: &str) -> String {

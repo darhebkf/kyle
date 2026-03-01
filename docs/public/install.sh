@@ -128,11 +128,44 @@ install() {
         echo ""
     fi
 
+    # Auto-upgrade prompt
+    echo ""
+    printf "Enable automatic updates? [y/N] "
+    read -r answer
+    if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+        "$INSTALL_DIR/kyle" config set auto_upgrade true 2>/dev/null && info "Auto-upgrade enabled"
+    fi
+
+    # Shell completions prompt
+    echo ""
+    printf "Install shell completions? [Y/n] "
+    read -r answer
+    if [ "$answer" != "n" ] && [ "$answer" != "N" ]; then
+        if [ -n "$profile" ]; then
+            local shell_type=""
+            case "$profile" in
+                *.zshrc) shell_type="zsh" ;;
+                *)       shell_type="bash" ;;
+            esac
+            echo "" >> "$profile"
+            echo "# Kyle completions" >> "$profile"
+            echo 'eval "$('$INSTALL_DIR'/kyle completions '$shell_type')"' >> "$profile"
+            info "Shell completions added to $profile"
+        else
+            warn "Could not detect shell profile — run 'kyle completions bash >> ~/.bashrc' manually"
+        fi
+    fi
+
     echo ""
     printf "${GREEN}✓${NC} kyle $version installed successfully!\n"
     echo ""
 
-    # Show how to start using kyle
+    # Verify installation
+    if command -v "$INSTALL_DIR/kyle" >/dev/null 2>&1; then
+        info "Verified: $("$INSTALL_DIR/kyle" --version 2>/dev/null)"
+    fi
+
+    echo ""
     if echo "$PATH" | grep -q "$INSTALL_DIR"; then
         echo "Run 'kyle --help' to get started."
     elif [ "$path_added" = true ]; then

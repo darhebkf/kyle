@@ -70,9 +70,37 @@ function Install-Kyle {
             }
         }
 
+        # Auto-upgrade prompt
+        Write-Host ""
+        $autoUpgrade = Read-Host "Enable automatic updates? [y/N]"
+        if ($autoUpgrade -eq "y" -or $autoUpgrade -eq "Y") {
+            & $exePath config set auto_upgrade true 2>$null
+            Write-Info "Auto-upgrade enabled"
+        }
+
+        # Shell completions prompt
+        Write-Host ""
+        $completions = Read-Host "Install shell completions? [Y/n]"
+        if ($completions -ne "n" -and $completions -ne "N") {
+            $profilePath = $PROFILE
+            if (-not (Test-Path $profilePath)) {
+                New-Item -ItemType File -Path $profilePath -Force | Out-Null
+            }
+            Add-Content -Path $profilePath -Value "`n# Kyle completions"
+            Add-Content -Path $profilePath -Value "& kyle completions bash | Out-String | Invoke-Expression"
+            Write-Info "Shell completions added to $profilePath"
+        }
+
         Write-Host ""
         Write-Host "✓ " -ForegroundColor Green -NoNewline
         Write-Host "kyle $version installed successfully!"
+
+        # Verify
+        $installedVersion = & $exePath --version 2>$null
+        if ($installedVersion) {
+            Write-Info "Verified: $installedVersion"
+        }
+
         Write-Host ""
         Write-Host "Run 'kyle --help' to get started."
     }

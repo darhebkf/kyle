@@ -140,7 +140,15 @@ kyle mcp --config     # Print config JSON for AI clients
 
 ### Setup
 
-Add to your AI client's MCP config:
+Claude Code: `claude mcp add --scope user kyle -- kyle mcp`
+Claude Desktop: add to `~/.claude/claude_desktop_config.json`
+Cursor: add to `~/.cursor/mcp.json`
+Windsurf: add to `~/.codeium/windsurf/mcp_config.json`
+Codex: `codex mcp add kyle -- kyle mcp` or `~/.codex/config.toml`
+Antigravity: add to `~/.gemini/antigravity/mcp_config.json`
+GitHub Copilot: add to `.vscode/mcp.json` (per-project, key is `servers` not `mcpServers`)
+
+JSON config format (Claude Desktop, Cursor, Windsurf, Antigravity):
 
 ```json
 {
@@ -153,10 +161,26 @@ Add to your AI client's MCP config:
 }
 ```
 
-Config file locations:
-- Claude Code: `~/.claude/claude_desktop_config.json`
-- Cursor: `~/.cursor/mcp.json`
-- Windsurf: `~/.codeium/windsurf/mcp_config.json`
+Codex TOML format (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.kyle]
+command = "kyle"
+args = ["mcp"]
+```
+
+GitHub Copilot format (`.vscode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "kyle": {
+      "command": "kyle",
+      "args": ["mcp"]
+    }
+  }
+}
+```
 
 ## CLI Reference
 

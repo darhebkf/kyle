@@ -163,30 +163,43 @@ install() {
     if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
         echo ""
         echo "  1) Claude Code"
-        echo "  2) Cursor"
-        echo "  3) Windsurf"
-        echo "  4) Skip"
+        echo "  2) Claude Desktop"
+        echo "  3) Cursor"
+        echo "  4) Windsurf"
+        echo "  5) Codex (OpenAI)"
+        echo "  6) Antigravity (Google)"
+        echo "  7) Other / manual"
+        echo "  8) Skip"
         echo ""
-        printf "Select AI client [1-4]: "
+        printf "Select AI client [1-8]: "
         read -r client
 
         local mcp_config='{"mcpServers":{"kyle":{"command":"'$INSTALL_DIR'/kyle","args":["mcp"]}}}'
 
         case "$client" in
             1)
-                local cc_dir="$HOME/.claude"
-                mkdir -p "$cc_dir"
-                local cc_file="$cc_dir/claude_desktop_config.json"
-                if [ -f "$cc_file" ]; then
-                    warn "$cc_file already exists — add kyle MCP manually:"
-                    echo ""
-                    echo "  $INSTALL_DIR/kyle mcp --config"
+                if command -v claude >/dev/null 2>&1; then
+                    claude mcp add --scope user kyle -- "$INSTALL_DIR/kyle" mcp 2>/dev/null && info "Kyle MCP added to Claude Code (global)"
                 else
-                    echo "$mcp_config" > "$cc_file"
-                    info "MCP config written to $cc_file"
+                    warn "claude CLI not found — install Claude Code first, then run:"
+                    echo ""
+                    echo "  claude mcp add --scope user kyle -- $INSTALL_DIR/kyle mcp"
                 fi
                 ;;
             2)
+                local cd_dir="$HOME/.claude"
+                mkdir -p "$cd_dir"
+                local cd_file="$cd_dir/claude_desktop_config.json"
+                if [ -f "$cd_file" ]; then
+                    warn "$cd_file already exists — add kyle MCP manually:"
+                    echo ""
+                    echo "  $INSTALL_DIR/kyle mcp --config"
+                else
+                    echo "$mcp_config" > "$cd_file"
+                    info "MCP config written to $cd_file"
+                fi
+                ;;
+            3)
                 local cursor_dir="$HOME/.cursor"
                 mkdir -p "$cursor_dir"
                 local cursor_file="$cursor_dir/mcp.json"
@@ -199,7 +212,7 @@ install() {
                     info "MCP config written to $cursor_file"
                 fi
                 ;;
-            3)
+            4)
                 local ws_dir="$HOME/.codeium/windsurf"
                 mkdir -p "$ws_dir"
                 local ws_file="$ws_dir/mcp_config.json"
@@ -211,6 +224,44 @@ install() {
                     echo "$mcp_config" > "$ws_file"
                     info "MCP config written to $ws_file"
                 fi
+                ;;
+            5)
+                if command -v codex >/dev/null 2>&1; then
+                    codex mcp add kyle -- "$INSTALL_DIR/kyle" mcp 2>/dev/null && info "Kyle MCP added to Codex"
+                else
+                    warn "codex CLI not found — install Codex first, then run:"
+                    echo ""
+                    echo "  codex mcp add kyle -- $INSTALL_DIR/kyle mcp"
+                fi
+                ;;
+            6)
+                local ag_dir="$HOME/.gemini/antigravity"
+                mkdir -p "$ag_dir"
+                local ag_file="$ag_dir/mcp_config.json"
+                if [ -f "$ag_file" ]; then
+                    warn "$ag_file already exists — add kyle MCP manually:"
+                    echo ""
+                    echo "  $INSTALL_DIR/kyle mcp --config"
+                else
+                    echo "$mcp_config" > "$ag_file"
+                    info "MCP config written to $ag_file"
+                fi
+                ;;
+            7)
+                echo ""
+                echo "Add kyle MCP to your client's config. The server command is:"
+                echo ""
+                echo "  $INSTALL_DIR/kyle mcp"
+                echo ""
+                echo "Common config locations:"
+                echo "  GitHub Copilot:  .vscode/mcp.json (per-project)"
+                echo "                   Format: {\"servers\":{\"kyle\":{\"command\":\"kyle\",\"args\":[\"mcp\"]}}}"
+                echo "  Codex:           ~/.codex/config.toml"
+                echo "                   Format: [mcp_servers.kyle]"
+                echo "                           command = \"$INSTALL_DIR/kyle\""
+                echo "                           args = [\"mcp\"]"
+                echo ""
+                echo "Or run 'kyle mcp --config' to get a JSON snippet."
                 ;;
             *)
                 info "Skipped MCP setup. Run 'kyle mcp --config' anytime to get the config."

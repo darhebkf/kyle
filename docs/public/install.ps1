@@ -97,11 +97,15 @@ function Install-Kyle {
         if ($mcpSetup -eq "y" -or $mcpSetup -eq "Y") {
             Write-Host ""
             Write-Host "  1) Claude Code"
-            Write-Host "  2) Cursor"
-            Write-Host "  3) Windsurf"
-            Write-Host "  4) Skip"
+            Write-Host "  2) Claude Desktop"
+            Write-Host "  3) Cursor"
+            Write-Host "  4) Windsurf"
+            Write-Host "  5) Codex (OpenAI)"
+            Write-Host "  6) Antigravity (Google)"
+            Write-Host "  7) Other / manual"
+            Write-Host "  8) Skip"
             Write-Host ""
-            $client = Read-Host "Select AI client [1-4]"
+            $client = Read-Host "Select AI client [1-8]"
 
             $mcpConfig = @{
                 mcpServers = @{
@@ -114,19 +118,29 @@ function Install-Kyle {
 
             switch ($client) {
                 "1" {
-                    $ccDir = "$env:USERPROFILE\.claude"
-                    $ccFile = "$ccDir\claude_desktop_config.json"
-                    if (Test-Path $ccFile) {
-                        Write-Warn "$ccFile already exists - add kyle MCP manually:"
-                        Write-Host ""
-                        Write-Host "  $exePath mcp --config"
+                    if (Get-Command claude -ErrorAction SilentlyContinue) {
+                        & claude mcp add --scope user kyle -- $exePath mcp 2>$null
+                        Write-Info "Kyle MCP added to Claude Code (global)"
                     } else {
-                        New-Item -ItemType Directory -Path $ccDir -Force | Out-Null
-                        $mcpConfig | Out-File -FilePath $ccFile -Encoding utf8
-                        Write-Info "MCP config written to $ccFile"
+                        Write-Warn "claude CLI not found - install Claude Code first, then run:"
+                        Write-Host ""
+                        Write-Host "  claude mcp add --scope user kyle -- $exePath mcp"
                     }
                 }
                 "2" {
+                    $cdDir = "$env:USERPROFILE\.claude"
+                    $cdFile = "$cdDir\claude_desktop_config.json"
+                    if (Test-Path $cdFile) {
+                        Write-Warn "$cdFile already exists - add kyle MCP manually:"
+                        Write-Host ""
+                        Write-Host "  $exePath mcp --config"
+                    } else {
+                        New-Item -ItemType Directory -Path $cdDir -Force | Out-Null
+                        $mcpConfig | Out-File -FilePath $cdFile -Encoding utf8
+                        Write-Info "MCP config written to $cdFile"
+                    }
+                }
+                "3" {
                     $cursorDir = "$env:USERPROFILE\.cursor"
                     $cursorFile = "$cursorDir\mcp.json"
                     if (Test-Path $cursorFile) {
@@ -139,7 +153,7 @@ function Install-Kyle {
                         Write-Info "MCP config written to $cursorFile"
                     }
                 }
-                "3" {
+                "4" {
                     $wsDir = "$env:USERPROFILE\.codeium\windsurf"
                     $wsFile = "$wsDir\mcp_config.json"
                     if (Test-Path $wsFile) {
@@ -151,6 +165,45 @@ function Install-Kyle {
                         $mcpConfig | Out-File -FilePath $wsFile -Encoding utf8
                         Write-Info "MCP config written to $wsFile"
                     }
+                }
+                "5" {
+                    if (Get-Command codex -ErrorAction SilentlyContinue) {
+                        & codex mcp add kyle -- $exePath mcp 2>$null
+                        Write-Info "Kyle MCP added to Codex"
+                    } else {
+                        Write-Warn "codex CLI not found - install Codex first, then run:"
+                        Write-Host ""
+                        Write-Host "  codex mcp add kyle -- $exePath mcp"
+                    }
+                }
+                "6" {
+                    $agDir = "$env:USERPROFILE\.gemini\antigravity"
+                    $agFile = "$agDir\mcp_config.json"
+                    if (Test-Path $agFile) {
+                        Write-Warn "$agFile already exists - add kyle MCP manually:"
+                        Write-Host ""
+                        Write-Host "  $exePath mcp --config"
+                    } else {
+                        New-Item -ItemType Directory -Path $agDir -Force | Out-Null
+                        $mcpConfig | Out-File -FilePath $agFile -Encoding utf8
+                        Write-Info "MCP config written to $agFile"
+                    }
+                }
+                "7" {
+                    Write-Host ""
+                    Write-Host "Add kyle MCP to your client's config. The server command is:"
+                    Write-Host ""
+                    Write-Host "  $exePath mcp"
+                    Write-Host ""
+                    Write-Host "Common config locations:"
+                    Write-Host "  GitHub Copilot:  .vscode/mcp.json (per-project)"
+                    Write-Host "                   Format: {`"servers`":{`"kyle`":{`"command`":`"kyle`",`"args`":[`"mcp`"]}}}"
+                    Write-Host "  Codex:           ~\.codex\config.toml"
+                    Write-Host "                   [mcp_servers.kyle]"
+                    Write-Host "                   command = `"$exePath`""
+                    Write-Host "                   args = [`"mcp`"]"
+                    Write-Host ""
+                    Write-Host "Or run 'kyle mcp --config' to get a JSON snippet."
                 }
                 default {
                     Write-Info "Skipped MCP setup. Run 'kyle mcp --config' anytime to get the config."

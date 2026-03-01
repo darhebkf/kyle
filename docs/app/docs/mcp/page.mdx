@@ -18,28 +18,16 @@ curl -fsSL https://kylefile.dev/install.sh | sh
 
 ### Manual Setup
 
-Get the MCP config JSON:
+<Tabs items={['Claude Code', 'Claude Desktop', 'Cursor', 'Windsurf', 'Codex', 'Antigravity', 'GitHub Copilot']}>
+  <Tabs.Tab>
+
+Run this command (global scope — works in every project):
 
 ```bash
-kyle mcp --config
+claude mcp add --scope user kyle -- kyle mcp
 ```
 
-This outputs:
-
-```json
-{
-  "mcpServers": {
-    "kyle": {
-      "command": "/home/you/.local/bin/kyle",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-Then add this to your AI client's config file:
-
-<Tabs items={['Claude Code', 'Cursor', 'Windsurf']}>
+  </Tabs.Tab>
   <Tabs.Tab>
 
 Add to `~/.claude/claude_desktop_config.json`:
@@ -88,10 +76,63 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 ```
 
   </Tabs.Tab>
+  <Tabs.Tab>
+
+Run this command:
+
+```bash
+codex mcp add kyle -- kyle mcp
+```
+
+Or add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.kyle]
+command = "kyle"
+args = ["mcp"]
+```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+
+Add to `~/.gemini/antigravity/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "kyle": {
+      "command": "kyle",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+
+Add to `.vscode/mcp.json` in your project:
+
+```json
+{
+  "servers": {
+    "kyle": {
+      "command": "kyle",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+<Callout type="info">
+GitHub Copilot uses per-project MCP config. Note the key is `servers`, not `mcpServers`.
+</Callout>
+
+  </Tabs.Tab>
 </Tabs>
 
 <Callout type="info">
-Since kyle is configured globally, it works in every project — no per-project MCP setup needed.
+You can also run `kyle mcp --config` to get a JSON snippet you can paste into any client's config.
 </Callout>
 
 ## Tools

@@ -14,6 +14,7 @@ pub struct Runner {
     working_dir: PathBuf,
     root_dir: PathBuf,
     executed: HashSet<String>,
+    in_progress: Vec<String>,
 }
 
 #[derive(Debug, Error)]
@@ -30,6 +31,9 @@ pub enum Error {
         #[source]
         source: crate::config::Error,
     },
+
+    #[error("circular dependency detected: {cycle}")]
+    CycleDetected { cycle: String },
 
     #[error("dependency '{dep}' failed: {source}")]
     DependencyFailed {
@@ -54,6 +58,7 @@ impl Runner {
             working_dir: cwd.clone(),
             root_dir: cwd,
             executed: HashSet::new(),
+            in_progress: Vec::new(),
         }
     }
 
@@ -63,10 +68,32 @@ impl Runner {
             working_dir,
             root_dir,
             executed: HashSet::new(),
+            in_progress: Vec::new(),
         }
     }
 
     pub fn run(&mut self, task_name: &str, args: &[String]) -> Result<(), Error> {
+        if self.executed.contains(task_name) {
+            return Ok(());
+        }
+
+        // Cycle detection
+        if self.in_progress.contains(&task_name.to_string()) {
+            let cycle_start = self
+                .in_progress
+                .iter()
+                .position(|t| t == task_name)
+                .unwrap_or(0);
+            let mut chain: Vec<&str> = self.in_progress[cycle_start..]
+                .iter()
+                .map(|s| s.as_str())
+                .collect();
+            chain.push(task_name);
+            return Err(Error::CycleDetected {
+                cycle: chain.join(" → "),
+            });
+        }
+
         let task = self
             .kylefile
             .tasks
@@ -74,23 +101,16 @@ impl Runner {
             .ok_or_else(|| Error::TaskNotFound(task_name.into()))?
             .clone();
 
+        self.in_progress.push(task_name.into());
+
         // Run dependencies first (without extra args, args only apply to main task)
         for dep in &task.deps {
             let dep_ref = parse_task_ref(dep);
 
-            // Create a unique key for executed tracking
-            let executed_key = if dep_ref.is_namespaced() {
-                dep.clone()
-            } else {
-                task_name.to_string()
-            };
-
-            if self.executed.contains(&executed_key) {
-                continue;
-            }
-
             if dep_ref.is_namespaced() {
-                // Cross-namespace dependency
+                if self.executed.contains(dep) {
+                    continue;
+                }
                 self.run_namespaced(
                     &dep_ref
                         .namespace
@@ -102,16 +122,11 @@ impl Runner {
                     source: Box::new(e),
                 })?;
             } else {
-                // Local dependency
                 self.run(dep, &[]).map_err(|e| Error::DependencyFailed {
                     dep: dep.clone(),
                     source: Box::new(e),
                 })?;
             }
-        }
-
-        if self.executed.contains(task_name) {
-            return Ok(());
         }
 
         println!("→ {task_name}");
@@ -137,12 +152,14 @@ impl Runner {
             })?;
 
         if !status.success() {
+            self.in_progress.pop();
             return Err(Error::ExecutionFailed {
                 task: task_name.into(),
                 source: io::Error::other(format!("exit code: {}", status.code().unwrap_or(-1))),
             });
         }
 
+        self.in_progress.pop();
         self.executed.insert(task_name.into());
         Ok(())
     }

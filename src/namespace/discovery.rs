@@ -22,6 +22,19 @@ pub enum FileType {
     Kylefile,
     Makefile,
     Justfile,
+    Taskfile,
+    Rakefile,
+    PackageJson,
+    ComposerJson,
+    DenoJson,
+    PyProject,
+    CargoToml,
+    GoMod,
+    Pubspec,
+    CSharpProject,
+    Gradle,
+    Maven,
+    CMake,
 }
 
 const PROJECT_FILES: &[(&str, FileType)] = &[
@@ -34,7 +47,25 @@ const PROJECT_FILES: &[(&str, FileType)] = &[
     ("GNUmakefile", FileType::Makefile),
     ("justfile", FileType::Justfile),
     ("Justfile", FileType::Justfile),
+    ("Taskfile.yml", FileType::Taskfile),
+    ("Taskfile.yaml", FileType::Taskfile),
+    ("Rakefile", FileType::Rakefile),
+    ("rakefile", FileType::Rakefile),
+    ("package.json", FileType::PackageJson),
+    ("composer.json", FileType::ComposerJson),
+    ("deno.json", FileType::DenoJson),
+    ("deno.jsonc", FileType::DenoJson),
+    ("pyproject.toml", FileType::PyProject),
+    ("Cargo.toml", FileType::CargoToml),
+    ("go.mod", FileType::GoMod),
+    ("pubspec.yaml", FileType::Pubspec),
+    ("build.gradle", FileType::Gradle),
+    ("build.gradle.kts", FileType::Gradle),
+    ("pom.xml", FileType::Maven),
+    ("CMakeLists.txt", FileType::CMake),
 ];
+
+const EXTENSION_FILES: &[(&str, FileType)] = &[(".csproj", FileType::CSharpProject)];
 
 #[derive(Debug, Clone)]
 pub struct DiscoveredNamespace {
@@ -90,9 +121,12 @@ pub fn discover_namespaces(root: &Path) -> Vec<DiscoveredNamespace> {
 }
 
 fn detect_file_type(filename: &str) -> Option<FileType> {
-    PROJECT_FILES
+    if let Some((_, ft)) = PROJECT_FILES.iter().find(|(name, _)| *name == filename) {
+        return Some(ft.clone());
+    }
+    EXTENSION_FILES
         .iter()
-        .find(|(name, _)| *name == filename)
+        .find(|(ext, _)| filename.ends_with(ext))
         .map(|(_, ft)| ft.clone())
 }
 

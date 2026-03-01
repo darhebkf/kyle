@@ -1,6 +1,9 @@
 use super::format::Format;
 use super::kylefile::Kylefile;
-use super::{Error, justfile, makefile};
+use super::{
+    Error, composer_json, deno_json, justfile, makefile, package_json, pyproject, rakefile,
+    standard, taskfile,
+};
 use crate::cli::RESERVED_COMMANDS;
 use crate::output;
 use crate::settings;
@@ -14,6 +17,22 @@ const FALLBACK_FILENAMES: &[&str] = &[
     "GNUmakefile",
     "justfile",
     "Justfile",
+    "Taskfile.yml",
+    "Taskfile.yaml",
+    "Rakefile",
+    "rakefile",
+    "package.json",
+    "composer.json",
+    "deno.json",
+    "deno.jsonc",
+    "pyproject.toml",
+    "Cargo.toml",
+    "go.mod",
+    "pubspec.yaml",
+    "build.gradle",
+    "build.gradle.kts",
+    "pom.xml",
+    "CMakeLists.txt",
 ];
 const HEADER_PREFIX: &str = "kyle:";
 
@@ -22,6 +41,19 @@ pub enum Source {
     Kylefile,
     Makefile,
     Justfile,
+    Taskfile,
+    Rakefile,
+    PackageJson,
+    ComposerJson,
+    DenoJson,
+    PyProject,
+    CargoToml,
+    GoMod,
+    Pubspec,
+    CSharpProject,
+    Gradle,
+    Maven,
+    CMake,
 }
 
 pub fn load(path: &str) -> Result<(Kylefile, Source), Error> {
@@ -49,6 +81,10 @@ pub fn load_from_dir(dir: &Path) -> Result<(Kylefile, Source), Error> {
         }
     }
 
+    if let Some(result) = find_by_extension(dir) {
+        return result;
+    }
+
     let all_names: Vec<&'static str> = DEFAULT_FILENAMES
         .iter()
         .chain(FALLBACK_FILENAMES.iter())
@@ -73,6 +109,10 @@ fn load_from_current_dir() -> Result<(Kylefile, Source), Error> {
         }
     }
 
+    if let Some(result) = find_by_extension(Path::new(".")) {
+        return result;
+    }
+
     let all_names: Vec<&'static str> = DEFAULT_FILENAMES
         .iter()
         .chain(FALLBACK_FILENAMES.iter())
@@ -80,6 +120,25 @@ fn load_from_current_dir() -> Result<(Kylefile, Source), Error> {
         .collect();
 
     Err(Error::NotFound(all_names))
+}
+
+const EXTENSION_MAP: &[(&str, Source)] = &[(".csproj", Source::CSharpProject)];
+
+fn find_by_extension(dir: &Path) -> Option<Result<(Kylefile, Source), Error>> {
+    let entries = fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_str().unwrap_or("");
+        for (ext, source) in EXTENSION_MAP {
+            if name.ends_with(ext) {
+                return Some(match *source {
+                    Source::CSharpProject => Ok((standard::dotnet(), Source::CSharpProject)),
+                    _ => Ok((standard::dotnet(), *source)),
+                });
+            }
+        }
+    }
+    None
 }
 
 fn load_file(path: &Path) -> Result<(Kylefile, Source), Error> {
@@ -93,6 +152,58 @@ fn load_file(path: &Path) -> Result<(Kylefile, Source), Error> {
 
     if matches!(filename, "justfile" | "Justfile") {
         return Ok((justfile::parse(&content)?, Source::Justfile));
+    }
+
+    if matches!(filename, "Taskfile.yml" | "Taskfile.yaml") {
+        return Ok((taskfile::parse(&content)?, Source::Taskfile));
+    }
+
+    if matches!(filename, "Rakefile" | "rakefile") {
+        return Ok((rakefile::parse(&content)?, Source::Rakefile));
+    }
+
+    if filename == "package.json" {
+        return Ok((package_json::parse(&content)?, Source::PackageJson));
+    }
+
+    if filename == "composer.json" {
+        return Ok((composer_json::parse(&content)?, Source::ComposerJson));
+    }
+
+    if matches!(filename, "deno.json" | "deno.jsonc") {
+        return Ok((deno_json::parse(&content)?, Source::DenoJson));
+    }
+
+    if filename == "pyproject.toml" {
+        return Ok((pyproject::parse(&content)?, Source::PyProject));
+    }
+
+    if filename == "Cargo.toml" {
+        return Ok((standard::cargo(), Source::CargoToml));
+    }
+
+    if filename == "go.mod" {
+        return Ok((standard::go_mod(), Source::GoMod));
+    }
+
+    if filename == "pubspec.yaml" {
+        return Ok((standard::pubspec(), Source::Pubspec));
+    }
+
+    if filename.ends_with(".csproj") {
+        return Ok((standard::dotnet(), Source::CSharpProject));
+    }
+
+    if matches!(filename, "build.gradle" | "build.gradle.kts") {
+        return Ok((standard::gradle(), Source::Gradle));
+    }
+
+    if filename == "pom.xml" {
+        return Ok((standard::maven(), Source::Maven));
+    }
+
+    if filename == "CMakeLists.txt" {
+        return Ok((standard::cmake(), Source::CMake));
     }
 
     let ext = path

@@ -241,11 +241,7 @@ fn list_all_tasks(cwd: &Path) -> Result<()> {
             if !discovered.is_empty() {
                 println!("\nDiscovered namespaces:");
                 for ns in &discovered {
-                    let type_indicator = match ns.file_type {
-                        FileType::Kylefile => "",
-                        FileType::Makefile => " (Makefile)",
-                        FileType::Justfile => " (justfile)",
-                    };
+                    let type_indicator = file_type_label(&ns.file_type);
                     println!("  {}:{type_indicator}", ns.alias);
                 }
             }
@@ -261,15 +257,32 @@ fn list_all_tasks(cwd: &Path) -> Result<()> {
 
             println!("Discovered namespaces:");
             for ns in &discovered {
-                let type_indicator = match ns.file_type {
-                    FileType::Kylefile => "",
-                    FileType::Makefile => " (Makefile)",
-                    FileType::Justfile => " (justfile)",
-                };
+                let type_indicator = file_type_label(&ns.file_type);
                 println!("  {}:{type_indicator}", ns.alias);
             }
         }
     }
 
     Ok(())
+}
+
+fn file_type_label(ft: &FileType) -> &'static str {
+    match ft {
+        FileType::Kylefile => "",
+        FileType::Makefile => " (Makefile)",
+        FileType::Justfile => " (justfile)",
+        FileType::Taskfile => " (Taskfile)",
+        FileType::Rakefile => " (Rakefile)",
+        FileType::PackageJson => " (package.json)",
+        FileType::ComposerJson => " (composer.json)",
+        FileType::DenoJson => " (deno.json)",
+        FileType::PyProject => " (pyproject.toml)",
+        FileType::CargoToml => " (Cargo.toml)",
+        FileType::GoMod => " (go.mod)",
+        FileType::Pubspec => " (pubspec.yaml)",
+        FileType::CSharpProject => " (.csproj)",
+        FileType::Gradle => " (Gradle)",
+        FileType::Maven => " (pom.xml)",
+        FileType::CMake => " (CMakeLists.txt)",
+    }
 }

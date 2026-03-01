@@ -1,8 +1,15 @@
+mod composer_json;
+mod deno_json;
 mod format;
 mod justfile;
 mod kylefile;
 mod loader;
 mod makefile;
+mod package_json;
+mod pyproject;
+mod rakefile;
+mod standard;
+mod taskfile;
 
 pub use format::Format;
 pub use kylefile::{Includes, Kylefile, Task};
@@ -20,6 +27,9 @@ pub enum Error {
 
     #[error("toml parse error: {0}")]
     Toml(#[from] toml::de::Error),
+
+    #[error("json parse error: {0}")]
+    Json(#[from] serde_json::Error),
 
     #[error("unknown format: {0}")]
     UnknownFormat(String),

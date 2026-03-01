@@ -65,6 +65,41 @@ $KYLE backend:nonexistent 2>&1 | grep -q "task not found" && pass "namespace: er
 rm -rf backend frontend apps Kylefile
 
 echo ""
+echo "=== Namespace Discovery (Multi-Format) ==="
+setup_temp
+
+mkdir -p node-app go-svc rust-lib
+
+cat > Kylefile << 'EOF'
+# kyle: toml
+name = "root"
+[tasks.hello]
+run = "echo root"
+EOF
+
+cat > node-app/package.json << 'EOF'
+{"name": "node-app", "scripts": {"build": "echo node-build", "test": "echo node-test"}}
+EOF
+
+cat > go-svc/go.mod << 'EOF'
+module example.com/go-svc
+go 1.21
+EOF
+
+cat > rust-lib/Cargo.toml << 'EOF'
+[package]
+name = "rust-lib"
+version = "0.1.0"
+EOF
+
+$KYLE 2>&1 | grep -q "node-app:" && pass "namespace: discovers node-app (package.json)" || fail "namespace: discovers node-app"
+$KYLE 2>&1 | grep -q "go-svc:" && pass "namespace: discovers go-svc (go.mod)" || fail "namespace: discovers go-svc"
+$KYLE 2>&1 | grep -q "rust-lib:" && pass "namespace: discovers rust-lib (Cargo.toml)" || fail "namespace: discovers rust-lib"
+$KYLE node-app:build 2>&1 | grep -q "node-build" && pass "namespace: runs node-app:build" || fail "namespace: runs node-app:build"
+
+rm -rf node-app go-svc rust-lib Kylefile
+
+echo ""
 echo "=== Namespace Separators (: and .) ==="
 
 mkdir -p backend

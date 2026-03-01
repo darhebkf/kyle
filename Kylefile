@@ -34,6 +34,6 @@ run = "cargo clean"
 desc = "Build debug binary"
 run = "cargo build"
 
-[tasks.upgrade]
-desc = "Build release and update bin/"
-run = "cargo build --release && rm -f bin/kyle && cp target/release/kyle bin/"
+[tasks.update]
+desc = "Build release and install to local PATH"
+run = "cargo build --release && rm -f ~/.local/bin/kyle && cp target/release/kyle ~/.local/bin/kyle"

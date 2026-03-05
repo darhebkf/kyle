@@ -2,6 +2,17 @@
 
 All notable changes to Kyle are documented here.
 
+## 0.1.8 — 2026-03-05 — Bugfixes
+
+### Fixed
+- Removed spurious "no Kylefile found" warning when running tasks from package.json, Makefile, Cargo.toml, and other supported file types
+- Fixed `kyle upgrade` failing with "Text file busy" on Linux
+- Fixed install script exiting immediately when piped via `curl | sh`
+- MCP `list_tasks` now shows human-readable source names
+
+### Note
+- If `kyle upgrade` fails from v0.1.7 or earlier, re-run the install script: `curl -fsSL https://kylefile.dev/install.sh | sh`
+
 ## 0.1.7 — 2026-03-01 — MCP Client Support
 
 ### Added

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - 2026-03-05 — Bugfixes
+
+### Fixed
+
+- Removed spurious "no Kylefile found" warning when running tasks from package.json, Makefile, Cargo.toml, and other supported file types
+- Fixed `kyle upgrade` failing with "Text file busy" on Linux (ETXTBSY) — binary now unlinks before replacing
+- Fixed install script exiting immediately when piped via `curl | sh` — prompts now read from `/dev/tty`
+- MCP `list_tasks` now shows human-readable source names (`package.json` instead of `PackageJson`)
+
+### Changed
+
+- Install scripts refactored with shared `ask()` and `write_mcp_json()` helpers
+- Added `Display` impl for `Source` and `FileType` enums
+- Removed unused `file_type_label` function from CLI
+
+### Note
+
+- If `kyle upgrade` fails from v0.1.7 or earlier (due to the ETXTBSY bug), re-run the install script: `curl -fsSL https://kylefile.dev/install.sh | sh`
+
 ## [0.1.7] - 2026-03-01 — MCP Client Support
 
 ### Added
@@ -115,6 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Install scripts for Unix and Windows
 - CI/CD with GitHub Actions
 
+[0.1.8]: https://github.com/darhebkf/kyle/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/darhebkf/kyle/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/darhebkf/kyle/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/darhebkf/kyle/compare/v0.1.4...v0.1.5

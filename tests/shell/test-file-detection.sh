@@ -16,7 +16,7 @@ test: build
 .PHONY: build test
 EOF
 $KYLE 2>&1 | grep -q "build" && pass "makefile: lists targets" || fail "makefile: lists targets"
-$KYLE 2>&1 | grep -q "warning" && pass "makefile: shows no-kylefile warning" || fail "makefile: shows no-kylefile warning"
+! $KYLE 2>&1 | grep -q "no Kylefile" && pass "makefile: no spurious kylefile warning" || fail "makefile: no spurious kylefile warning"
 $KYLE build 2>&1 | grep -q "building from makefile" && pass "makefile: runs target" || fail "makefile: runs target"
 $KYLE 2>&1 | grep -q "Build the project" && pass "makefile: extracts description from comment" || fail "makefile: extracts description from comment"
 rm Makefile
@@ -33,7 +33,7 @@ test: build
     echo "testing from justfile"
 EOF
 $KYLE 2>&1 | grep -q "build" && pass "justfile: lists recipes" || fail "justfile: lists recipes"
-$KYLE 2>&1 | grep -q "warning" && pass "justfile: shows no-kylefile warning" || fail "justfile: shows no-kylefile warning"
+! $KYLE 2>&1 | grep -q "no Kylefile" && pass "justfile: no spurious kylefile warning" || fail "justfile: no spurious kylefile warning"
 $KYLE build 2>&1 | grep -q "building from justfile" && pass "justfile: runs recipe" || fail "justfile: runs recipe"
 $KYLE 2>&1 | grep -q "Build the project" && pass "justfile: extracts description from comment" || fail "justfile: extracts description from comment"
 rm justfile

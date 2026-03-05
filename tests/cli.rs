@@ -360,6 +360,80 @@ fn mcp_config_output() {
 }
 
 // =============================================================================
+// Non-Kylefile Sources (no spurious warning)
+// =============================================================================
+
+#[test]
+fn package_json_no_kylefile_warning() {
+    let temp = TempDir::new().unwrap();
+    fs::write(
+        temp.path().join("package.json"),
+        r#"{"name":"test","scripts":{"build":"echo building"}}"#,
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("build")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("building"))
+        .stderr(predicate::str::contains("no Kylefile").not());
+}
+
+#[test]
+fn package_json_list_no_warning() {
+    let temp = TempDir::new().unwrap();
+    fs::write(
+        temp.path().join("package.json"),
+        r#"{"name":"test","scripts":{"build":"echo b","test":"echo t"}}"#,
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("build"))
+        .stderr(predicate::str::contains("no Kylefile").not());
+}
+
+#[test]
+fn makefile_no_kylefile_warning() {
+    let temp = TempDir::new().unwrap();
+    fs::write(
+        temp.path().join("Makefile"),
+        "build:\n\techo building-from-makefile\n",
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("build")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("building-from-makefile"))
+        .stderr(predicate::str::contains("no Kylefile").not());
+}
+
+#[test]
+fn cargo_toml_no_kylefile_warning() {
+    let temp = TempDir::new().unwrap();
+    fs::write(
+        temp.path().join("Cargo.toml"),
+        "[package]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("build"))
+        .stderr(predicate::str::contains("no Kylefile").not());
+}
+
+// =============================================================================
 // Format Detection
 // =============================================================================
 

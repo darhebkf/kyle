@@ -267,10 +267,12 @@ fn compute_sha256(path: &Path) -> Result<String> {
 fn replace_binary(new_binary: &Path, current_exe: &Path) -> Result<()> {
     #[cfg(unix)]
     {
-        // Unix: simple rename/move
+        // On Linux, writing to a running executable fails with ETXTBSY.
+        // Remove the old file first (unlinks the inode while the process keeps its handle),
+        // then copy the new binary to the now-free path.
+        fs::remove_file(current_exe).ok();
         fs::copy(new_binary, current_exe).context("Failed to replace binary")?;
 
-        // Make executable
         use std::os::unix::fs::PermissionsExt;
         let mut perms = fs::metadata(current_exe)?.permissions();
         perms.set_mode(0o755);

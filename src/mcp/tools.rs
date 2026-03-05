@@ -41,7 +41,7 @@ impl KyleMcp {
 
         match load_from_dir(&self.root) {
             Ok((kf, source)) => {
-                output.push_str(&format!("Source: {source:?}\n\nTasks:\n"));
+                output.push_str(&format!("Source: {source}\n\nTasks:\n"));
                 let mut names: Vec<_> = kf.tasks.keys().collect();
                 names.sort();
                 for name in names {
@@ -65,7 +65,7 @@ impl KyleMcp {
         if !discovered.is_empty() {
             output.push_str("\nNamespaces:\n");
             for ns in &discovered {
-                output.push_str(&format!("  {} ({:?})\n", ns.alias, ns.file_type));
+                output.push_str(&format!("  {} ({})\n", ns.alias, ns.file_type));
                 if let Ok((kf, _)) = load_from_dir(&ns.path) {
                     let mut names: Vec<_> = kf.tasks.keys().collect();
                     names.sort();

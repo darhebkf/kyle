@@ -37,6 +37,29 @@ pub enum FileType {
     CMake,
 }
 
+impl std::fmt::Display for FileType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Kylefile => write!(f, "Kylefile"),
+            Self::Makefile => write!(f, "Makefile"),
+            Self::Justfile => write!(f, "justfile"),
+            Self::Taskfile => write!(f, "Taskfile.yml"),
+            Self::Rakefile => write!(f, "Rakefile"),
+            Self::PackageJson => write!(f, "package.json"),
+            Self::ComposerJson => write!(f, "composer.json"),
+            Self::DenoJson => write!(f, "deno.json"),
+            Self::PyProject => write!(f, "pyproject.toml"),
+            Self::CargoToml => write!(f, "Cargo.toml"),
+            Self::GoMod => write!(f, "go.mod"),
+            Self::Pubspec => write!(f, "pubspec.yaml"),
+            Self::CSharpProject => write!(f, ".csproj"),
+            Self::Gradle => write!(f, "build.gradle"),
+            Self::Maven => write!(f, "pom.xml"),
+            Self::CMake => write!(f, "CMakeLists.txt"),
+        }
+    }
+}
+
 const PROJECT_FILES: &[(&str, FileType)] = &[
     ("Kylefile", FileType::Kylefile),
     ("Kylefile.yaml", FileType::Kylefile),

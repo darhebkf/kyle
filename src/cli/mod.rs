@@ -3,10 +3,9 @@ mod config;
 mod init;
 mod upgrade;
 
-use crate::config::{self as kylefile_config, Source, load_from_dir};
+use crate::config::{self as kylefile_config, load_from_dir};
 use crate::namespace::discovery::{FileType, discover_namespaces};
 use crate::namespace::{parse_task_ref, resolve_namespace};
-use crate::output;
 use crate::runner::Runner;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -169,12 +168,9 @@ fn run_tasks(task: Option<&str>, args: &[String]) -> Result<()> {
 
     match task {
         Some(task_input) => {
-            if let Ok((kf, source)) = kylefile_config::load("")
+            if let Ok((kf, _source)) = kylefile_config::load("")
                 && kf.tasks.contains_key(task_input)
             {
-                if source != Source::Kylefile {
-                    output::warn("no Kylefile found, run 'kyle init' to create one");
-                }
                 let mut runner = Runner::with_working_dir(kf, cwd.to_path_buf(), cwd.to_path_buf());
                 return runner.run(task_input, args).map_err(Into::into);
             }
@@ -192,12 +188,8 @@ fn run_tasks(task: Option<&str>, args: &[String]) -> Result<()> {
 }
 
 fn run_local_task(cwd: &Path, task_name: &str, args: &[String]) -> Result<()> {
-    let (kf, source) = kylefile_config::load("")
+    let (kf, _source) = kylefile_config::load("")
         .context("No Kylefile found in current directory.\n\n  Run 'kyle init' to create one.")?;
-
-    if source != Source::Kylefile {
-        output::warn("no Kylefile found, run 'kyle init' to create one");
-    }
 
     let mut runner = Runner::with_working_dir(kf, cwd.to_path_buf(), cwd.to_path_buf());
     runner.run(task_name, args)?;
@@ -229,11 +221,7 @@ fn list_all_tasks(cwd: &Path) -> Result<()> {
     let local_result = kylefile_config::load("");
 
     match local_result {
-        Ok((kf, source)) => {
-            if source != Source::Kylefile {
-                output::warn("no Kylefile found, run 'kyle init' to create one");
-            }
-
+        Ok((kf, _source)) => {
             println!("Available tasks:");
             let runner = Runner::new(kf.clone());
             runner.list_tasks();
@@ -251,8 +239,11 @@ fn list_all_tasks(cwd: &Path) -> Result<()> {
             if !discovered.is_empty() {
                 println!("\nDiscovered namespaces:");
                 for ns in &discovered {
-                    let type_indicator = file_type_label(&ns.file_type);
-                    println!("  {}:{type_indicator}", ns.alias);
+                    if ns.file_type == FileType::Kylefile {
+                        println!("  {}:", ns.alias);
+                    } else {
+                        println!("  {}: ({})", ns.alias, ns.file_type);
+                    }
                 }
             }
         }
@@ -267,32 +258,14 @@ fn list_all_tasks(cwd: &Path) -> Result<()> {
 
             println!("Discovered namespaces:");
             for ns in &discovered {
-                let type_indicator = file_type_label(&ns.file_type);
-                println!("  {}:{type_indicator}", ns.alias);
+                if ns.file_type == FileType::Kylefile {
+                    println!("  {}:", ns.alias);
+                } else {
+                    println!("  {}: ({})", ns.alias, ns.file_type);
+                }
             }
         }
     }
 
     Ok(())
-}
-
-fn file_type_label(ft: &FileType) -> &'static str {
-    match ft {
-        FileType::Kylefile => "",
-        FileType::Makefile => " (Makefile)",
-        FileType::Justfile => " (justfile)",
-        FileType::Taskfile => " (Taskfile)",
-        FileType::Rakefile => " (Rakefile)",
-        FileType::PackageJson => " (package.json)",
-        FileType::ComposerJson => " (composer.json)",
-        FileType::DenoJson => " (deno.json)",
-        FileType::PyProject => " (pyproject.toml)",
-        FileType::CargoToml => " (Cargo.toml)",
-        FileType::GoMod => " (go.mod)",
-        FileType::Pubspec => " (pubspec.yaml)",
-        FileType::CSharpProject => " (.csproj)",
-        FileType::Gradle => " (Gradle)",
-        FileType::Maven => " (pom.xml)",
-        FileType::CMake => " (CMakeLists.txt)",
-    }
 }

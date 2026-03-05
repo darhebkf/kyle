@@ -16,48 +16,53 @@ function Get-LatestVersion {
     return $response.tag_name
 }
 
+function Write-McpJson {
+    param($Dir, $File, $Config)
+    if (Test-Path $File) {
+        Write-Warn "$File already exists - add kyle MCP manually:"
+        Write-Host ""
+        Write-Host "  kyle mcp --config"
+    } else {
+        New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+        $Config | Out-File -FilePath $File -Encoding utf8
+        Write-Info "MCP config written to $File"
+    }
+}
+
 function Install-Kyle {
     Write-Info "Detected platform: windows-x86_64 ($Target)"
 
-    # Get version
     $version = if ($env:KYLE_VERSION) { $env:KYLE_VERSION } else { Get-LatestVersion }
     if (-not $version) {
         Write-Err "Could not determine latest version"
     }
     Write-Info "Installing kyle $version"
 
-    # Download URL
     $url = "https://github.com/$Repo/releases/download/$version/kyle-$Target.zip"
-
-    # Create temp directory
     $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
     New-Item -ItemType Directory -Path $tmpDir | Out-Null
 
     try {
-        # Download
         Write-Info "Downloading from $url"
         $zipPath = Join-Path $tmpDir "kyle.zip"
         Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
 
-        # Extract
         Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force
 
-        # Install
         if (-not (Test-Path $InstallDir)) {
             New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
         }
         $exePath = Join-Path $InstallDir "kyle.exe"
         Move-Item -Path (Join-Path $tmpDir "kyle.exe") -Destination $exePath -Force
-
         Write-Info "Installed kyle to $exePath"
 
-        # Check PATH
+        # PATH
         $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
         if ($userPath -notlike "*$InstallDir*") {
             Write-Warn "$InstallDir is not in your PATH"
             Write-Host ""
-            $addToPath = Read-Host "Add to PATH? [Y/n]"
-            if ($addToPath -ne "n" -and $addToPath -ne "N") {
+            $answer = Read-Host "Add to PATH? [Y/n]"
+            if ($answer -ne "n" -and $answer -ne "N") {
                 [Environment]::SetEnvironmentVariable("Path", "$userPath;$InstallDir", "User")
                 $env:Path = "$env:Path;$InstallDir"
                 Write-Info "Added to PATH"
@@ -70,18 +75,18 @@ function Install-Kyle {
             }
         }
 
-        # Auto-upgrade prompt
+        # Auto-upgrade
         Write-Host ""
-        $autoUpgrade = Read-Host "Enable automatic updates? [y/N]"
-        if ($autoUpgrade -eq "y" -or $autoUpgrade -eq "Y") {
+        $answer = Read-Host "Enable automatic updates? [y/N]"
+        if ($answer -eq "y" -or $answer -eq "Y") {
             & $exePath config set auto_upgrade true 2>$null
             Write-Info "Auto-upgrade enabled"
         }
 
-        # Shell completions prompt
+        # Shell completions
         Write-Host ""
-        $completions = Read-Host "Install shell completions? [Y/n]"
-        if ($completions -ne "n" -and $completions -ne "N") {
+        $answer = Read-Host "Install shell completions? [Y/n]"
+        if ($answer -ne "n" -and $answer -ne "N") {
             $profilePath = $PROFILE
             if (-not (Test-Path $profilePath)) {
                 New-Item -ItemType File -Path $profilePath -Force | Out-Null
@@ -91,10 +96,10 @@ function Install-Kyle {
             Write-Info "Shell completions added to $profilePath"
         }
 
-        # MCP setup prompt
+        # MCP setup
         Write-Host ""
-        $mcpSetup = Read-Host "Set up MCP for AI tools? [y/N]"
-        if ($mcpSetup -eq "y" -or $mcpSetup -eq "Y") {
+        $answer = Read-Host "Set up MCP for AI tools? [y/N]"
+        if ($answer -eq "y" -or $answer -eq "Y") {
             Write-Host ""
             Write-Host "  1) Claude Code"
             Write-Host "  2) Claude Desktop"
@@ -127,45 +132,9 @@ function Install-Kyle {
                         Write-Host "  claude mcp add --scope user kyle -- $exePath mcp"
                     }
                 }
-                "2" {
-                    $cdDir = "$env:USERPROFILE\.claude"
-                    $cdFile = "$cdDir\claude_desktop_config.json"
-                    if (Test-Path $cdFile) {
-                        Write-Warn "$cdFile already exists - add kyle MCP manually:"
-                        Write-Host ""
-                        Write-Host "  $exePath mcp --config"
-                    } else {
-                        New-Item -ItemType Directory -Path $cdDir -Force | Out-Null
-                        $mcpConfig | Out-File -FilePath $cdFile -Encoding utf8
-                        Write-Info "MCP config written to $cdFile"
-                    }
-                }
-                "3" {
-                    $cursorDir = "$env:USERPROFILE\.cursor"
-                    $cursorFile = "$cursorDir\mcp.json"
-                    if (Test-Path $cursorFile) {
-                        Write-Warn "$cursorFile already exists - add kyle MCP manually:"
-                        Write-Host ""
-                        Write-Host "  $exePath mcp --config"
-                    } else {
-                        New-Item -ItemType Directory -Path $cursorDir -Force | Out-Null
-                        $mcpConfig | Out-File -FilePath $cursorFile -Encoding utf8
-                        Write-Info "MCP config written to $cursorFile"
-                    }
-                }
-                "4" {
-                    $wsDir = "$env:USERPROFILE\.codeium\windsurf"
-                    $wsFile = "$wsDir\mcp_config.json"
-                    if (Test-Path $wsFile) {
-                        Write-Warn "$wsFile already exists - add kyle MCP manually:"
-                        Write-Host ""
-                        Write-Host "  $exePath mcp --config"
-                    } else {
-                        New-Item -ItemType Directory -Path $wsDir -Force | Out-Null
-                        $mcpConfig | Out-File -FilePath $wsFile -Encoding utf8
-                        Write-Info "MCP config written to $wsFile"
-                    }
-                }
+                "2" { Write-McpJson "$env:USERPROFILE\.claude" "$env:USERPROFILE\.claude\claude_desktop_config.json" $mcpConfig }
+                "3" { Write-McpJson "$env:USERPROFILE\.cursor" "$env:USERPROFILE\.cursor\mcp.json" $mcpConfig }
+                "4" { Write-McpJson "$env:USERPROFILE\.codeium\windsurf" "$env:USERPROFILE\.codeium\windsurf\mcp_config.json" $mcpConfig }
                 "5" {
                     if (Get-Command codex -ErrorAction SilentlyContinue) {
                         & codex mcp add kyle -- $exePath mcp 2>$null
@@ -176,19 +145,7 @@ function Install-Kyle {
                         Write-Host "  codex mcp add kyle -- $exePath mcp"
                     }
                 }
-                "6" {
-                    $agDir = "$env:USERPROFILE\.gemini\antigravity"
-                    $agFile = "$agDir\mcp_config.json"
-                    if (Test-Path $agFile) {
-                        Write-Warn "$agFile already exists - add kyle MCP manually:"
-                        Write-Host ""
-                        Write-Host "  $exePath mcp --config"
-                    } else {
-                        New-Item -ItemType Directory -Path $agDir -Force | Out-Null
-                        $mcpConfig | Out-File -FilePath $agFile -Encoding utf8
-                        Write-Info "MCP config written to $agFile"
-                    }
-                }
+                "6" { Write-McpJson "$env:USERPROFILE\.gemini\antigravity" "$env:USERPROFILE\.gemini\antigravity\mcp_config.json" $mcpConfig }
                 "7" {
                     Write-Host ""
                     Write-Host "Add kyle MCP to your client's config. The server command is:"
@@ -215,7 +172,6 @@ function Install-Kyle {
         Write-Host "✓ " -ForegroundColor Green -NoNewline
         Write-Host "kyle $version installed successfully!"
 
-        # Verify
         $installedVersion = & $exePath --version 2>$null
         if ($installedVersion) {
             Write-Info "Verified: $installedVersion"
@@ -225,7 +181,6 @@ function Install-Kyle {
         Write-Host "Run 'kyle --help' to get started."
     }
     finally {
-        # Cleanup
         Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }

@@ -7,7 +7,6 @@ set -e
 REPO="darhebkf/kyle"
 INSTALL_DIR="${KYLE_INSTALL_DIR:-$HOME/.local/bin}"
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -17,7 +16,25 @@ info() { printf "${GREEN}info${NC}: %s\n" "$1"; }
 warn() { printf "${YELLOW}warn${NC}: %s\n" "$1"; }
 error() { printf "${RED}error${NC}: %s\n" "$1" >&2; exit 1; }
 
-# Detect OS
+ask() {
+    printf "%s " "$1"
+    read -r REPLY </dev/tty || REPLY=""
+}
+
+write_mcp_json() {
+    local dir="$1"
+    local file="$2"
+    mkdir -p "$dir"
+    if [ -f "$file" ]; then
+        warn "$file already exists — add kyle MCP manually:"
+        echo ""
+        echo "  $INSTALL_DIR/kyle mcp --config"
+    else
+        echo '{"mcpServers":{"kyle":{"command":"'"$INSTALL_DIR"'/kyle","args":["mcp"]}}}' > "$file"
+        info "MCP config written to $file"
+    fi
+}
+
 detect_os() {
     case "$(uname -s)" in
         Linux*)  echo "linux" ;;
@@ -26,7 +43,6 @@ detect_os() {
     esac
 }
 
-# Detect architecture
 detect_arch() {
     case "$(uname -m)" in
         x86_64|amd64)  echo "x86_64" ;;
@@ -35,11 +51,9 @@ detect_arch() {
     esac
 }
 
-# Map to target triple
 get_target() {
     local os="$1"
     local arch="$2"
-
     case "$os-$arch" in
         linux-x86_64)   echo "x86_64-unknown-linux-musl" ;;
         linux-aarch64)  echo "aarch64-unknown-linux-musl" ;;
@@ -49,14 +63,12 @@ get_target() {
     esac
 }
 
-# Get latest release version
 get_latest_version() {
     curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" |
         grep '"tag_name":' |
         sed -E 's/.*"([^"]+)".*/\1/'
 }
 
-# Download and install
 install() {
     local os=$(detect_os)
     local arch=$(detect_arch)
@@ -64,32 +76,23 @@ install() {
 
     info "Detected platform: $os-$arch ($target)"
 
-    # Get version
     local version="${KYLE_VERSION:-$(get_latest_version)}"
     if [ -z "$version" ]; then
         error "Could not determine latest version"
     fi
     info "Installing kyle $version"
 
-    # Download URL
     local url="https://github.com/$REPO/releases/download/$version/kyle-$target.tar.gz"
-
-    # Create temp directory
     local tmp_dir=$(mktemp -d)
     trap "rm -rf $tmp_dir" EXIT
 
-    # Download
     info "Downloading from $url"
     curl -fsSL "$url" -o "$tmp_dir/kyle.tar.gz" || error "Download failed"
-
-    # Extract
     tar -xzf "$tmp_dir/kyle.tar.gz" -C "$tmp_dir" || error "Extraction failed"
 
-    # Install
     mkdir -p "$INSTALL_DIR"
     mv "$tmp_dir/kyle" "$INSTALL_DIR/kyle" || error "Installation failed"
     chmod +x "$INSTALL_DIR/kyle"
-
     info "Installed kyle to $INSTALL_DIR/kyle"
 
     # Detect shell profile
@@ -104,13 +107,11 @@ install() {
 
     local path_added=false
 
-    # Check if in PATH
     if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
         warn "$INSTALL_DIR is not in your PATH"
         echo ""
-        printf "Add to PATH? [Y/n] "
-        read -r answer
-        if [ "$answer" != "n" ] && [ "$answer" != "N" ]; then
+        ask "Add to PATH? [Y/n]"
+        if [ "$REPLY" != "n" ] && [ "$REPLY" != "N" ]; then
             if [ -n "$profile" ]; then
                 echo "" >> "$profile"
                 echo "# Kyle" >> "$profile"
@@ -128,19 +129,15 @@ install() {
         echo ""
     fi
 
-    # Auto-upgrade prompt
     echo ""
-    printf "Enable automatic updates? [y/N] "
-    read -r answer
-    if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+    ask "Enable automatic updates? [y/N]"
+    if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
         "$INSTALL_DIR/kyle" config set auto_upgrade true 2>/dev/null && info "Auto-upgrade enabled"
     fi
 
-    # Shell completions prompt
     echo ""
-    printf "Install shell completions? [Y/n] "
-    read -r answer
-    if [ "$answer" != "n" ] && [ "$answer" != "N" ]; then
+    ask "Install shell completions? [Y/n]"
+    if [ "$REPLY" != "n" ] && [ "$REPLY" != "N" ]; then
         if [ -n "$profile" ]; then
             local shell_type=""
             case "$profile" in
@@ -156,11 +153,9 @@ install() {
         fi
     fi
 
-    # MCP setup prompt
     echo ""
-    printf "Set up MCP for AI tools? [y/N] "
-    read -r answer
-    if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+    ask "Set up MCP for AI tools? [y/N]"
+    if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
         echo ""
         echo "  1) Claude Code"
         echo "  2) Claude Desktop"
@@ -171,12 +166,9 @@ install() {
         echo "  7) Other / manual"
         echo "  8) Skip"
         echo ""
-        printf "Select AI client [1-8]: "
-        read -r client
+        ask "Select AI client [1-8]:"
 
-        local mcp_config='{"mcpServers":{"kyle":{"command":"'$INSTALL_DIR'/kyle","args":["mcp"]}}}'
-
-        case "$client" in
+        case "$REPLY" in
             1)
                 if command -v claude >/dev/null 2>&1; then
                     claude mcp add --scope user kyle -- "$INSTALL_DIR/kyle" mcp 2>/dev/null && info "Kyle MCP added to Claude Code (global)"
@@ -186,45 +178,9 @@ install() {
                     echo "  claude mcp add --scope user kyle -- $INSTALL_DIR/kyle mcp"
                 fi
                 ;;
-            2)
-                local cd_dir="$HOME/.claude"
-                mkdir -p "$cd_dir"
-                local cd_file="$cd_dir/claude_desktop_config.json"
-                if [ -f "$cd_file" ]; then
-                    warn "$cd_file already exists — add kyle MCP manually:"
-                    echo ""
-                    echo "  $INSTALL_DIR/kyle mcp --config"
-                else
-                    echo "$mcp_config" > "$cd_file"
-                    info "MCP config written to $cd_file"
-                fi
-                ;;
-            3)
-                local cursor_dir="$HOME/.cursor"
-                mkdir -p "$cursor_dir"
-                local cursor_file="$cursor_dir/mcp.json"
-                if [ -f "$cursor_file" ]; then
-                    warn "$cursor_file already exists — add kyle MCP manually:"
-                    echo ""
-                    echo "  $INSTALL_DIR/kyle mcp --config"
-                else
-                    echo "$mcp_config" > "$cursor_file"
-                    info "MCP config written to $cursor_file"
-                fi
-                ;;
-            4)
-                local ws_dir="$HOME/.codeium/windsurf"
-                mkdir -p "$ws_dir"
-                local ws_file="$ws_dir/mcp_config.json"
-                if [ -f "$ws_file" ]; then
-                    warn "$ws_file already exists — add kyle MCP manually:"
-                    echo ""
-                    echo "  $INSTALL_DIR/kyle mcp --config"
-                else
-                    echo "$mcp_config" > "$ws_file"
-                    info "MCP config written to $ws_file"
-                fi
-                ;;
+            2) write_mcp_json "$HOME/.claude" "$HOME/.claude/claude_desktop_config.json" ;;
+            3) write_mcp_json "$HOME/.cursor" "$HOME/.cursor/mcp.json" ;;
+            4) write_mcp_json "$HOME/.codeium/windsurf" "$HOME/.codeium/windsurf/mcp_config.json" ;;
             5)
                 if command -v codex >/dev/null 2>&1; then
                     codex mcp add kyle -- "$INSTALL_DIR/kyle" mcp 2>/dev/null && info "Kyle MCP added to Codex"
@@ -234,19 +190,7 @@ install() {
                     echo "  codex mcp add kyle -- $INSTALL_DIR/kyle mcp"
                 fi
                 ;;
-            6)
-                local ag_dir="$HOME/.gemini/antigravity"
-                mkdir -p "$ag_dir"
-                local ag_file="$ag_dir/mcp_config.json"
-                if [ -f "$ag_file" ]; then
-                    warn "$ag_file already exists — add kyle MCP manually:"
-                    echo ""
-                    echo "  $INSTALL_DIR/kyle mcp --config"
-                else
-                    echo "$mcp_config" > "$ag_file"
-                    info "MCP config written to $ag_file"
-                fi
-                ;;
+            6) write_mcp_json "$HOME/.gemini/antigravity" "$HOME/.gemini/antigravity/mcp_config.json" ;;
             7)
                 echo ""
                 echo "Add kyle MCP to your client's config. The server command is:"
@@ -273,7 +217,6 @@ install() {
     printf "${GREEN}✓${NC} kyle $version installed successfully!\n"
     echo ""
 
-    # Verify installation
     if command -v "$INSTALL_DIR/kyle" >/dev/null 2>&1; then
         info "Verified: $("$INSTALL_DIR/kyle" --version 2>/dev/null)"
     fi

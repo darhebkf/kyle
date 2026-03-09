@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-03-09
+
+### Fixed
+
+- Tasks from package.json, composer.json, and pyproject.toml now resolve local binaries (`node_modules/.bin`, `vendor/bin`, `.venv/bin` prepended to PATH)
+
 ## [0.1.8] - 2026-03-05 — Bugfixes
 
 ### Fixed
@@ -18,7 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Install scripts refactored with shared `ask()` and `write_mcp_json()` helpers
 - Added `Display` impl for `Source` and `FileType` enums
-- Removed unused `file_type_label` function from CLI
 
 ### Note
 
@@ -134,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Install scripts for Unix and Windows
 - CI/CD with GitHub Actions
 
+[0.1.9]: https://github.com/darhebkf/kyle/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/darhebkf/kyle/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/darhebkf/kyle/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/darhebkf/kyle/compare/v0.1.5...v0.1.6

@@ -434,6 +434,38 @@ fn cargo_toml_no_kylefile_warning() {
 }
 
 // =============================================================================
+// Local bin PATH injection (node_modules/.bin, vendor/bin, .venv/bin)
+// =============================================================================
+
+#[test]
+fn package_json_resolves_node_modules_bin() {
+    let temp = TempDir::new().unwrap();
+    fs::write(
+        temp.path().join("package.json"),
+        r#"{"name":"test","scripts":{"greet":"mybin"}}"#,
+    )
+    .unwrap();
+
+    let bin_dir = temp.path().join("node_modules/.bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    let script = bin_dir.join("mybin");
+    fs::write(&script, "#!/bin/sh\necho hello-from-node-modules\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("greet")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("hello-from-node-modules"));
+}
+
+// =============================================================================
 // Format Detection
 // =============================================================================
 

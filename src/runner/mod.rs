@@ -138,10 +138,13 @@ impl Runner {
             format!("{} {}", task.run, args.join(" "))
         };
 
+        let path_env = self.build_path();
+
         let status = Command::new(SHELL)
             .arg(SHELL_FLAG)
             .arg(&cmd)
             .current_dir(&self.working_dir)
+            .env("PATH", &path_env)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -198,6 +201,24 @@ impl Runner {
 
     pub fn source(&self) -> Option<Source> {
         None // Will be set by CLI when needed
+    }
+
+    fn build_path(&self) -> String {
+        let system_path = std::env::var("PATH").unwrap_or_default();
+        let local_bin_dirs: &[&str] = &["node_modules/.bin", "vendor/bin", ".venv/bin"];
+        let mut extra: Vec<String> = Vec::new();
+        for dir in local_bin_dirs {
+            let full = self.working_dir.join(dir);
+            if full.is_dir() {
+                extra.push(full.to_string_lossy().into_owned());
+            }
+        }
+        if extra.is_empty() {
+            system_path
+        } else {
+            extra.push(system_path);
+            extra.join(":")
+        }
     }
 
     pub fn list_tasks(&self) {

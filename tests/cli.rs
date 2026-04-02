@@ -466,6 +466,122 @@ fn package_json_resolves_node_modules_bin() {
 }
 
 // =============================================================================
+// Namespace Discovery (parent dir → child namespaces)
+// =============================================================================
+
+#[test]
+fn parent_discovers_and_runs_child_task() {
+    let temp = TempDir::new().unwrap();
+    let child = temp.path().join("frontend");
+    fs::create_dir(&child).unwrap();
+    fs::write(
+        child.join("package.json"),
+        r#"{"name":"frontend","scripts":{"build":"echo building-frontend"}}"#,
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("build")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("building-frontend"));
+}
+
+#[test]
+fn parent_discovers_unique_task_across_types() {
+    let temp = TempDir::new().unwrap();
+    let frontend = temp.path().join("frontend");
+    fs::create_dir(&frontend).unwrap();
+    fs::write(
+        frontend.join("package.json"),
+        r#"{"name":"frontend","scripts":{"lint":"echo linting-frontend"}}"#,
+    )
+    .unwrap();
+
+    let backend = temp.path().join("backend");
+    fs::create_dir(&backend).unwrap();
+    fs::write(
+        backend.join("Makefile"),
+        "deploy:\n\techo deploying-backend\n",
+    )
+    .unwrap();
+
+    // "lint" only exists in frontend — should resolve unambiguously
+    kyle()
+        .current_dir(temp.path())
+        .arg("lint")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("linting-frontend"));
+}
+
+#[test]
+fn parent_conflicting_task_names_error() {
+    let temp = TempDir::new().unwrap();
+    let frontend = temp.path().join("frontend");
+    fs::create_dir(&frontend).unwrap();
+    fs::write(
+        frontend.join("package.json"),
+        r#"{"name":"frontend","scripts":{"build":"echo building-frontend"}}"#,
+    )
+    .unwrap();
+
+    let backend = temp.path().join("backend");
+    fs::create_dir(&backend).unwrap();
+    fs::write(
+        backend.join("package.json"),
+        r#"{"name":"backend","scripts":{"build":"echo building-backend"}}"#,
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("build")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("multiple namespaces"));
+}
+
+#[test]
+fn parent_task_not_found_shows_namespaces() {
+    let temp = TempDir::new().unwrap();
+    let child = temp.path().join("myapp");
+    fs::create_dir(&child).unwrap();
+    fs::write(
+        child.join("package.json"),
+        r#"{"name":"myapp","scripts":{"build":"echo hi"}}"#,
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("nonexistent")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("myapp"));
+}
+
+#[test]
+fn parent_namespaced_syntax_still_works() {
+    let temp = TempDir::new().unwrap();
+    let child = temp.path().join("frontend");
+    fs::create_dir(&child).unwrap();
+    fs::write(
+        child.join("package.json"),
+        r#"{"name":"frontend","scripts":{"build":"echo building-frontend"}}"#,
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("frontend:build")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("building-frontend"));
+}
+
+// =============================================================================
 // Format Detection
 // =============================================================================
 

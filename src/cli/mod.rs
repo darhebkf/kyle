@@ -168,10 +168,13 @@ fn run_tasks(task: Option<&str>, args: &[String]) -> Result<()> {
 
     match task {
         Some(task_input) => {
-            if let Ok((kf, _source)) = kylefile_config::load("")
+            let local = kylefile_config::load("");
+
+            if let Ok((ref kf, _)) = local
                 && kf.tasks.contains_key(task_input)
             {
-                let mut runner = Runner::with_working_dir(kf, cwd.to_path_buf(), cwd.to_path_buf());
+                let mut runner =
+                    Runner::with_working_dir(kf.clone(), cwd.to_path_buf(), cwd.to_path_buf());
                 return runner.run(task_input, args).map_err(Into::into);
             }
 
@@ -179,8 +182,10 @@ fn run_tasks(task: Option<&str>, args: &[String]) -> Result<()> {
 
             if let Some(namespace) = &task_ref.namespace {
                 run_namespaced_task(&cwd, namespace, &task_ref.task_name, args)
-            } else {
+            } else if local.is_ok() {
                 run_local_task(&cwd, &task_ref.task_name, args)
+            } else {
+                run_discovered_task(&cwd, &task_ref.task_name, args)
             }
         }
         None => list_all_tasks(&cwd),
@@ -214,6 +219,60 @@ fn run_namespaced_task(
     let mut runner = Runner::with_working_dir(kf, ns_dir, root.to_path_buf());
     runner.run(task_name, args)?;
     Ok(())
+}
+
+fn run_discovered_task(cwd: &Path, task_name: &str, args: &[String]) -> Result<()> {
+    let discovered = discover_namespaces(cwd);
+
+    if discovered.is_empty() {
+        anyhow::bail!(
+            "No Kylefile found in current directory.\n\n  Run 'kyle init' to create one."
+        );
+    }
+
+    let mut matches = Vec::new();
+    for ns in &discovered {
+        if let Ok((kf, _)) = load_from_dir(&ns.path)
+            && kf.tasks.contains_key(task_name)
+        {
+            matches.push((ns, kf));
+        }
+    }
+
+    match matches.len() {
+        0 => {
+            let ns_list: String = discovered
+                .iter()
+                .map(|ns| {
+                    if ns.file_type == FileType::Kylefile {
+                        format!("  {}", ns.alias)
+                    } else {
+                        format!("  {} ({})", ns.alias, ns.file_type)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            anyhow::bail!(
+                "Task '{task_name}' not found.\n\nDiscovered namespaces:\n{ns_list}\n\n  Use 'kyle <namespace>:{task_name}' to run a namespaced task."
+            );
+        }
+        1 => {
+            let (ns, kf) = matches.into_iter().next().unwrap();
+            let mut runner = Runner::with_working_dir(kf, ns.path.clone(), cwd.to_path_buf());
+            runner.run(task_name, args)?;
+            Ok(())
+        }
+        _ => {
+            let ns_list: String = matches
+                .iter()
+                .map(|(ns, _)| format!("  {}:{} ({})", ns.alias, task_name, ns.file_type))
+                .collect::<Vec<_>>()
+                .join("\n");
+            anyhow::bail!(
+                "Task '{task_name}' found in multiple namespaces:\n{ns_list}\n\n  Use the full name to pick one."
+            );
+        }
+    }
 }
 
 fn list_all_tasks(cwd: &Path) -> Result<()> {

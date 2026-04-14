@@ -46,6 +46,10 @@ pub struct Cli {
     /// Print task names (used by completion scripts)
     #[arg(long, hide = true)]
     summary: bool,
+
+    /// Internal: run a throttled auto-upgrade check in the background
+    #[arg(long, hide = true)]
+    upgrade_check: bool,
 }
 
 #[derive(Subcommand)]
@@ -79,7 +83,11 @@ enum Command {
     Version,
 
     /// Upgrade kyle to the latest version (duh)
-    Upgrade,
+    Upgrade {
+        /// Show recent auto-upgrade activity instead of upgrading
+        #[arg(long)]
+        status: bool,
+    },
 
     /// MCP server for AI tools
     Mcp {
@@ -119,13 +127,18 @@ enum ConfigAction {
 }
 
 pub fn run() -> Result<()> {
-    upgrade::check_auto_upgrade();
-
     let cli = Cli::parse();
 
     if cli.summary {
         return print_summary();
     }
+
+    if cli.upgrade_check {
+        upgrade::background_check();
+        return Ok(());
+    }
+
+    upgrade::check_auto_upgrade();
 
     match cli.command {
         Some(Command::Init {
@@ -152,7 +165,13 @@ pub fn run() -> Result<()> {
             println!("kyle {VERSION}");
             Ok(())
         }
-        Some(Command::Upgrade) => upgrade::run(),
+        Some(Command::Upgrade { status }) => {
+            if status {
+                upgrade::print_status()
+            } else {
+                upgrade::run()
+            }
+        }
         Some(Command::Mcp { config }) => {
             if config {
                 crate::mcp::print_config()

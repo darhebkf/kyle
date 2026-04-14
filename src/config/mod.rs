@@ -13,7 +13,7 @@ mod taskfile;
 
 pub use format::Format;
 pub use kylefile::{Includes, Kylefile, Task};
-pub use loader::{Source, load, load_from_dir};
+pub use loader::{Source, detect_project_tasks, load, load_from_dir};
 
 use thiserror::Error;
 

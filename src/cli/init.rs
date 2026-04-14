@@ -1,3 +1,4 @@
+use crate::config::detect_project_tasks;
 use crate::settings;
 use anyhow::Result;
 use std::env;
@@ -37,6 +38,45 @@ pub fn run(name: Option<&str>, format: Option<&str>) -> Result<()> {
     fs::write(KYLEFILE, &content)?;
 
     println!("\n  Created {KYLEFILE}\n");
+    Ok(())
+}
+
+pub fn run_detect(name: Option<&str>, format: Option<&str>) -> Result<()> {
+    let name = name
+        .map(String::from)
+        .or_else(|| {
+            env::current_dir()
+                .ok()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+        })
+        .unwrap_or_else(|| DEFAULT_PROJECT_NAME.to_string());
+
+    let format = format
+        .map(String::from)
+        .unwrap_or_else(|| settings::get().default_format);
+
+    let cwd = env::current_dir()?;
+    let (kf, source) = detect_project_tasks(&cwd)
+        .ok_or_else(|| anyhow::anyhow!("No project files found to detect tasks from"))?;
+
+    let mut tasks: Vec<TaskDef> = kf
+        .tasks
+        .iter()
+        .map(|(task_name, task)| TaskDef {
+            name: task_name.clone(),
+            desc: task.desc.clone(),
+            run: task.run.clone(),
+        })
+        .collect();
+    tasks.sort_by(|a, b| a.name.cmp(&b.name));
+
+    let content = generate_kylefile(&format, &name, &tasks);
+    fs::write(KYLEFILE, &content)?;
+
+    println!(
+        "\n  Created {KYLEFILE} with {} tasks from {source}\n",
+        tasks.len()
+    );
     Ok(())
 }
 

@@ -63,6 +63,10 @@ enum Command {
         /// Use TOML format (default)
         #[arg(long)]
         toml: bool,
+
+        /// Auto-detect tasks from project files (Cargo.toml, package.json, etc.)
+        #[arg(long)]
+        detect: bool,
     },
 
     /// Configure kyle settings
@@ -124,7 +128,12 @@ pub fn run() -> Result<()> {
     }
 
     match cli.command {
-        Some(Command::Init { name, yaml, toml }) => {
+        Some(Command::Init {
+            name,
+            yaml,
+            toml,
+            detect,
+        }) => {
             let format = if yaml {
                 Some("yaml")
             } else if toml {
@@ -132,7 +141,11 @@ pub fn run() -> Result<()> {
             } else {
                 None
             };
-            init::run(name.as_deref(), format)
+            if detect {
+                init::run_detect(name.as_deref(), format)
+            } else {
+                init::run(name.as_deref(), format)
+            }
         }
         Some(Command::Config { action }) => config::run(action),
         Some(Command::Version) => {

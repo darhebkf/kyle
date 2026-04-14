@@ -434,6 +434,99 @@ fn cargo_toml_no_kylefile_warning() {
 }
 
 // =============================================================================
+// Empty Kylefile fallthrough
+// =============================================================================
+
+#[test]
+fn empty_kylefile_falls_through_to_cargo_toml() {
+    let temp = TempDir::new().unwrap();
+    fs::write(
+        temp.path().join("Kylefile"),
+        "# kyle: toml\nversion = \"0.1.0\"\nname = \"test\"\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("Cargo.toml"),
+        "[package]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("build"))
+        .stderr(predicate::str::contains("Kylefile has no tasks"));
+}
+
+#[test]
+fn empty_kylefile_falls_through_to_package_json() {
+    let temp = TempDir::new().unwrap();
+    fs::write(
+        temp.path().join("Kylefile"),
+        "# kyle: toml\nversion = \"0.1.0\"\nname = \"test\"\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("package.json"),
+        r#"{"name":"test","scripts":{"dev":"echo running-dev"}}"#,
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("dev")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("running-dev"));
+}
+
+#[test]
+fn init_detect_populates_from_cargo_toml() {
+    let temp = TempDir::new().unwrap();
+    fs::write(
+        temp.path().join("Cargo.toml"),
+        "[package]\nname = \"test\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("init")
+        .arg("test")
+        .arg("--detect")
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(temp.path().join("Kylefile")).unwrap();
+    assert!(content.contains("cargo build"));
+    assert!(content.contains("cargo test"));
+    assert!(content.contains("cargo fmt"));
+}
+
+#[test]
+fn init_detect_populates_from_package_json() {
+    let temp = TempDir::new().unwrap();
+    fs::write(
+        temp.path().join("package.json"),
+        r#"{"name":"myapp","scripts":{"build":"vite build","dev":"vite","test":"vitest"}}"#,
+    )
+    .unwrap();
+
+    kyle()
+        .current_dir(temp.path())
+        .arg("init")
+        .arg("myapp")
+        .arg("--detect")
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(temp.path().join("Kylefile")).unwrap();
+    assert!(content.contains("vite build"));
+    assert!(content.contains("vitest"));
+}
+
+// =============================================================================
 // Local bin PATH injection (node_modules/.bin, vendor/bin, .venv/bin)
 // =============================================================================
 

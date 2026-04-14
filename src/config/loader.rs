@@ -93,7 +93,20 @@ pub fn load_from_dir(dir: &Path) -> Result<(Kylefile, Source), Error> {
     for name in DEFAULT_FILENAMES {
         let path = dir.join(name);
         if path.exists() {
-            return load_file(&path);
+            let result = load_file(&path)?;
+            if !result.0.tasks.is_empty() {
+                return Ok(result);
+            }
+            // Empty Kylefile — try fallback files in same dir
+            for fb_name in FALLBACK_FILENAMES {
+                let fb_path = dir.join(fb_name);
+                if fb_path.exists()
+                    && let Ok(fb) = load_file(&fb_path)
+                {
+                    return Ok(fb);
+                }
+            }
+            return Ok(result);
         }
     }
 
@@ -121,7 +134,19 @@ fn load_from_current_dir() -> Result<(Kylefile, Source), Error> {
     for name in DEFAULT_FILENAMES {
         let path = Path::new(name);
         if path.exists() {
-            return load_file(path);
+            let result = load_file(path)?;
+            if !result.0.tasks.is_empty() {
+                return Ok(result);
+            }
+            // Kylefile exists but has no tasks — try fallback files
+            if let Some(fallback) = load_first_fallback() {
+                output::warn(&format!(
+                    "Kylefile has no tasks, using {}. Run 'kyle init --detect' to auto-populate",
+                    fallback.1
+                ));
+                return Ok(fallback);
+            }
+            return Ok(result);
         }
     }
 
@@ -143,6 +168,39 @@ fn load_from_current_dir() -> Result<(Kylefile, Source), Error> {
         .collect();
 
     Err(Error::NotFound(all_names))
+}
+
+fn load_first_fallback() -> Option<(Kylefile, Source)> {
+    for name in FALLBACK_FILENAMES {
+        let path = Path::new(name);
+        if path.exists() {
+            return load_file(path).ok();
+        }
+    }
+    if let Some(Ok(result)) = find_by_extension(Path::new(".")) {
+        return Some(result);
+    }
+    None
+}
+
+/// Load tasks from project files only (skip Kylefiles).
+/// Used by `kyle init --detect` to find tasks to populate a new Kylefile.
+pub fn detect_project_tasks(dir: &Path) -> Option<(Kylefile, Source)> {
+    for name in FALLBACK_FILENAMES {
+        let path = dir.join(name);
+        if path.exists()
+            && let Ok(result) = load_file(&path)
+            && !result.0.tasks.is_empty()
+        {
+            return Some(result);
+        }
+    }
+    if let Some(Ok(result)) = find_by_extension(dir)
+        && !result.0.tasks.is_empty()
+    {
+        return Some(result);
+    }
+    None
 }
 
 const EXTENSION_MAP: &[(&str, Source)] = &[(".csproj", Source::CSharpProject)];

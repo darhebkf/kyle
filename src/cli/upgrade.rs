@@ -141,7 +141,7 @@ fn get_target() -> String {
         ("macos", "x86_64") => "x86_64-apple-darwin".to_string(),
         ("macos", "aarch64") => "aarch64-apple-darwin".to_string(),
         ("windows", "x86_64") => "x86_64-pc-windows-msvc".to_string(),
-        _ => format!("{}-{}", arch, os),
+        _ => format!("{arch}-{os}"),
     }
 }
 
@@ -201,7 +201,7 @@ fn extract_binary(archive: &Path, dest: &Path) -> Result<PathBuf> {
 
         Ok(dest.join("kyle.exe"))
     } else {
-        anyhow::bail!("Unknown archive format: {}", archive_str);
+        anyhow::bail!("Unknown archive format: {archive_str}");
     }
 }
 

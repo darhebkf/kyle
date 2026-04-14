@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod config;
+pub mod dispatchers;
 pub mod mcp;
 pub mod namespace;
 pub mod output;

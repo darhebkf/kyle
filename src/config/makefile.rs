@@ -75,6 +75,7 @@ pub fn parse(content: &str) -> Result<Kylefile, Error> {
                 desc: pending_comment.take().unwrap_or_default(),
                 run: commands.join(" && "),
                 deps,
+                ..Default::default()
             };
 
             tasks.insert(target_name, task);

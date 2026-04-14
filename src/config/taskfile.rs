@@ -44,6 +44,7 @@ pub fn parse(content: &str) -> Result<Kylefile, Error> {
                     desc,
                     run: cmds.join(" && "),
                     deps,
+                    ..Default::default()
                 },
             );
         }

@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -19,9 +20,10 @@ pub struct DispatcherContext<'a> {
     pub source_hint: SourceHint,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Subcommand {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 }
 
@@ -41,9 +43,10 @@ impl Subcommand {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Expansion {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Dispatcher {
     pub extension: String,
+    #[serde(default)]
     pub subcommands: BTreeMap<String, Subcommand>,
 }
 
@@ -78,19 +81,20 @@ impl DispatcherRegistry {
         self.extensions.push(ext);
     }
 
-    pub fn try_expand(&self, ctx: &DispatcherContext<'_>) -> Option<Expansion> {
+    pub fn try_expand(&self, ctx: &DispatcherContext<'_>) -> Option<Dispatcher> {
         for ext in &self.extensions {
-            if ext.detect(ctx) {
-                let subcommands = ext
-                    .enumerate(ctx)
-                    .into_iter()
-                    .map(|s| (s.name.clone(), s))
-                    .collect();
-                return Some(Expansion {
-                    extension: ext.id().to_string(),
-                    subcommands,
-                });
+            if !ext.detect(ctx) {
+                continue;
             }
+            let subcommands = ext
+                .enumerate(ctx)
+                .into_iter()
+                .map(|s| (s.name.clone(), s))
+                .collect();
+            return Some(Dispatcher {
+                extension: ext.id().to_string(),
+                subcommands,
+            });
         }
         None
     }

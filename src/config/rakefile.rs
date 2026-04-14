@@ -82,6 +82,7 @@ pub fn parse(content: &str) -> Result<Kylefile, Error> {
                     desc: pending_desc.take().unwrap_or_default(),
                     run: commands.join(" && "),
                     deps,
+                    ..Default::default()
                 },
             );
             continue;

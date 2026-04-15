@@ -9,7 +9,7 @@ use crate::namespace::{parse_task_ref, resolve_namespace};
 use crate::runner::Runner;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
@@ -198,30 +198,366 @@ fn print_summary() -> Result<()> {
 fn run_tasks(task: Option<&str>, args: &[String]) -> Result<()> {
     let cwd = std::env::current_dir().context("Failed to get current directory")?;
 
-    match task {
-        Some(task_input) => {
-            let local = kylefile_config::load("");
+    let Some(task_input) = task else {
+        return list_all_tasks(&cwd);
+    };
 
-            if let Ok((ref kf, _)) = local
-                && kf.tasks.contains_key(task_input)
-            {
-                let mut runner =
-                    Runner::with_working_dir(kf.clone(), cwd.to_path_buf(), cwd.to_path_buf());
-                return runner.run(task_input, args).map_err(Into::into);
-            }
+    // Short-circuit: if the input contains `:` or `.` AND a local task has
+    // that literal name (e.g. `test:e2e`, `build.debug`), run it directly.
+    // This preserves literal-name semantics without hiding ambiguities in
+    // the flat path (where the input has no separator).
+    if (task_input.contains(':') || task_input.contains('.'))
+        && let Ok((kf, _)) = kylefile_config::load("")
+        && kf.tasks.contains_key(task_input)
+    {
+        let mut runner = Runner::with_working_dir(kf, cwd.to_path_buf(), cwd.to_path_buf());
+        return runner.run(task_input, args).map_err(Into::into);
+    }
 
-            let task_ref = parse_task_ref(task_input);
+    let task_ref = parse_task_ref(task_input);
+    if let Some(prefix) = &task_ref.namespace {
+        return run_qualified(&cwd, prefix, &task_ref.task_name, args);
+    }
 
-            if let Some(namespace) = &task_ref.namespace {
-                run_namespaced_task(&cwd, namespace, &task_ref.task_name, args)
-            } else if local.is_ok() {
-                run_local_task(&cwd, &task_ref.task_name, args)
-            } else {
-                run_discovered_task(&cwd, &task_ref.task_name, args)
+    run_flat(&cwd, task_input, args)
+}
+
+#[derive(Debug)]
+enum FlatMatch {
+    Local {
+        task_name: String,
+    },
+    LocalSub {
+        dispatcher_task: String,
+        sub_name: String,
+        exec_prefix: String,
+    },
+    Namespace {
+        alias: String,
+        path: PathBuf,
+        task_name: String,
+    },
+    NamespaceSub {
+        alias: String,
+        path: PathBuf,
+        dispatcher_task: String,
+        sub_name: String,
+        exec_prefix: String,
+    },
+}
+
+impl FlatMatch {
+    fn qualified_syntax(&self) -> String {
+        match self {
+            FlatMatch::Local { task_name } => task_name.clone(),
+            FlatMatch::LocalSub {
+                dispatcher_task,
+                sub_name,
+                ..
+            } => format!("{dispatcher_task}:{sub_name}"),
+            FlatMatch::Namespace {
+                alias, task_name, ..
+            } => format!("{alias}:{task_name}"),
+            FlatMatch::NamespaceSub {
+                alias,
+                dispatcher_task,
+                sub_name,
+                ..
+            } => format!("{alias}:{dispatcher_task}:{sub_name}"),
+        }
+    }
+}
+
+fn run_flat(cwd: &Path, task_input: &str, args: &[String]) -> Result<()> {
+    let local = kylefile_config::load("").ok().map(|(kf, _)| kf);
+    let discovered = discover_namespaces(cwd);
+
+    // Level 1: local matches. Direct tasks shadow dispatcher subs within the
+    // same file — user-authored pyproject.toml entries always win over
+    // Django-discovered management commands with the same name.
+    let mut local_matches: Vec<FlatMatch> = Vec::new();
+    if let Some(ref kf) = local {
+        if kf.tasks.contains_key(task_input) {
+            local_matches.push(FlatMatch::Local {
+                task_name: task_input.to_string(),
+            });
+        } else {
+            for (name, task) in &kf.tasks {
+                if let Some(d) = &task.dispatcher
+                    && d.subcommands.contains_key(task_input)
+                {
+                    local_matches.push(FlatMatch::LocalSub {
+                        dispatcher_task: name.clone(),
+                        sub_name: task_input.to_string(),
+                        exec_prefix: d.exec_prefix.clone(),
+                    });
+                }
             }
         }
-        None => list_all_tasks(&cwd),
     }
+
+    if !local_matches.is_empty() {
+        return resolve_level(cwd, task_input, dedupe_matches(local_matches), args);
+    }
+
+    // Level 2: discovered namespaces. Same shadowing rule per namespace.
+    let mut ns_matches: Vec<FlatMatch> = Vec::new();
+    for ns in &discovered {
+        let Ok((kf, _)) = load_from_dir(&ns.path) else {
+            continue;
+        };
+        if kf.tasks.contains_key(task_input) {
+            ns_matches.push(FlatMatch::Namespace {
+                alias: ns.alias.clone(),
+                path: ns.path.clone(),
+                task_name: task_input.to_string(),
+            });
+            continue;
+        }
+        for (name, task) in &kf.tasks {
+            if let Some(d) = &task.dispatcher
+                && d.subcommands.contains_key(task_input)
+            {
+                ns_matches.push(FlatMatch::NamespaceSub {
+                    alias: ns.alias.clone(),
+                    path: ns.path.clone(),
+                    dispatcher_task: name.clone(),
+                    sub_name: task_input.to_string(),
+                    exec_prefix: d.exec_prefix.clone(),
+                });
+            }
+        }
+    }
+
+    if ns_matches.is_empty() {
+        return bail_not_found(cwd, task_input, local.is_some(), &discovered);
+    }
+    resolve_level(cwd, task_input, dedupe_matches(ns_matches), args)
+}
+
+// Collapse dispatcher-sub matches whose underlying exec_prefix is identical
+// (within the same level — local-only, or per-namespace for namespace subs).
+// Sorted alphabetically by dispatcher task name so the winner is stable.
+fn dedupe_matches(mut matches: Vec<FlatMatch>) -> Vec<FlatMatch> {
+    matches.sort_by(|a, b| match (a, b) {
+        (
+            FlatMatch::LocalSub {
+                dispatcher_task: an,
+                ..
+            },
+            FlatMatch::LocalSub {
+                dispatcher_task: bn,
+                ..
+            },
+        ) => an.cmp(bn),
+        (
+            FlatMatch::NamespaceSub {
+                alias: aa,
+                dispatcher_task: an,
+                ..
+            },
+            FlatMatch::NamespaceSub {
+                alias: ba,
+                dispatcher_task: bn,
+                ..
+            },
+        ) => aa.cmp(ba).then_with(|| an.cmp(bn)),
+        _ => std::cmp::Ordering::Equal,
+    });
+    let mut seen: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+    matches.retain(|m| match m {
+        FlatMatch::LocalSub { exec_prefix, .. } => {
+            seen.insert((String::new(), exec_prefix.clone()))
+        }
+        FlatMatch::NamespaceSub {
+            alias, exec_prefix, ..
+        } => seen.insert((alias.clone(), exec_prefix.clone())),
+        _ => true,
+    });
+    matches
+}
+
+fn resolve_level(
+    cwd: &Path,
+    task_input: &str,
+    matches: Vec<FlatMatch>,
+    args: &[String],
+) -> Result<()> {
+    match matches.len() {
+        1 => execute_flat(cwd, matches.into_iter().next().unwrap(), args),
+        _ => {
+            let list: String = matches
+                .iter()
+                .map(|m| format!("  kyle {}", m.qualified_syntax()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            anyhow::bail!(
+                "'{task_input}' is ambiguous — matches multiple tasks:\n{list}\n\n  Use the qualified form to pick one."
+            );
+        }
+    }
+}
+
+fn execute_flat(cwd: &Path, m: FlatMatch, args: &[String]) -> Result<()> {
+    match m {
+        FlatMatch::Local { task_name } => run_local_task(cwd, &task_name, args),
+        FlatMatch::LocalSub {
+            dispatcher_task,
+            sub_name,
+            ..
+        } => {
+            let (kf, _) = kylefile_config::load("").context("No Kylefile found")?;
+            run_dispatcher_sub(cwd, cwd, kf, &dispatcher_task, &sub_name, args, None)
+        }
+        FlatMatch::Namespace {
+            alias,
+            path,
+            task_name,
+        } => {
+            let (kf, _) = load_from_dir(&path)
+                .with_context(|| format!("Failed to load Kylefile from namespace '{alias}'"))?;
+            let mut runner = Runner::with_working_dir(kf, path, cwd.to_path_buf());
+            runner.run(&task_name, args).map_err(Into::into)
+        }
+        FlatMatch::NamespaceSub {
+            alias,
+            path,
+            dispatcher_task,
+            sub_name,
+            ..
+        } => {
+            let (kf, _) = load_from_dir(&path)
+                .with_context(|| format!("Failed to load Kylefile from namespace '{alias}'"))?;
+            run_dispatcher_sub(
+                cwd,
+                &path,
+                kf,
+                &dispatcher_task,
+                &sub_name,
+                args,
+                Some(&alias),
+            )
+        }
+    }
+}
+
+fn run_qualified(cwd: &Path, left: &str, right: &str, args: &[String]) -> Result<()> {
+    // Case 1: left is a real namespace directory — resolve right inside it
+    let ns_dir = resolve_namespace(cwd, left);
+    if ns_dir.exists() {
+        let (kf, _) = load_from_dir(&ns_dir)
+            .with_context(|| format!("Failed to load Kylefile from namespace '{left}'"))?;
+
+        if kf.tasks.contains_key(right) {
+            let mut runner = Runner::with_working_dir(kf, ns_dir, cwd.to_path_buf());
+            return runner.run(right, args).map_err(Into::into);
+        }
+
+        let subs: Vec<String> = kf
+            .tasks
+            .iter()
+            .filter_map(|(n, t)| {
+                t.dispatcher
+                    .as_ref()
+                    .and_then(|d| d.subcommands.contains_key(right).then(|| n.clone()))
+            })
+            .collect();
+
+        match subs.len() {
+            0 => anyhow::bail!("task not found: '{right}' in namespace '{left}'"),
+            1 => {
+                let dispatcher_task = subs.into_iter().next().unwrap();
+                return run_dispatcher_sub(
+                    cwd,
+                    &ns_dir,
+                    kf,
+                    &dispatcher_task,
+                    right,
+                    args,
+                    Some(left),
+                );
+            }
+            _ => {
+                let list: String = subs
+                    .iter()
+                    .map(|t| format!("  kyle {left}:{t}:{right}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                anyhow::bail!(
+                    "'{right}' is ambiguous in namespace '{left}':\n{list}\n\n  Use the qualified form to pick one."
+                );
+            }
+        }
+    }
+
+    // Case 2: left is a local dispatcher task name, right is one of its subcommands
+    if let Ok((kf, _)) = kylefile_config::load("")
+        && let Some(task) = kf.tasks.get(left)
+        && let Some(d) = &task.dispatcher
+        && d.subcommands.contains_key(right)
+    {
+        return run_dispatcher_sub(cwd, cwd, kf.clone(), left, right, args, None);
+    }
+
+    anyhow::bail!("Namespace directory not found: {}", ns_dir.display())
+}
+
+fn run_dispatcher_sub(
+    cwd: &Path,
+    working_dir: &Path,
+    kf: crate::config::Kylefile,
+    dispatcher_task: &str,
+    sub_name: &str,
+    args: &[String],
+    namespace: Option<&str>,
+) -> Result<()> {
+    let task = kf
+        .tasks
+        .get(dispatcher_task)
+        .with_context(|| format!("dispatcher task '{dispatcher_task}' vanished"))?;
+    let d = task
+        .dispatcher
+        .as_ref()
+        .with_context(|| format!("task '{dispatcher_task}' is not a dispatcher"))?;
+    let label = match namespace {
+        Some(ns) => format!("{ns}:{dispatcher_task}:{sub_name}"),
+        None => format!("{dispatcher_task}:{sub_name}"),
+    };
+    let command = format!("{} {}", d.exec_prefix, sub_name);
+    let runner = Runner::with_working_dir(kf, working_dir.to_path_buf(), cwd.to_path_buf());
+    runner
+        .run_command(&label, &command, args)
+        .map_err(Into::into)
+}
+
+fn bail_not_found(
+    _cwd: &Path,
+    task_input: &str,
+    has_local: bool,
+    discovered: &[crate::namespace::discovery::DiscoveredNamespace],
+) -> Result<()> {
+    if !has_local && discovered.is_empty() {
+        anyhow::bail!(
+            "No Kylefile found in current directory.\n\n  Run 'kyle init' to create one."
+        );
+    }
+    if discovered.is_empty() {
+        anyhow::bail!("task not found: {task_input}");
+    }
+    let ns_list: String = discovered
+        .iter()
+        .map(|ns| {
+            if ns.file_type == FileType::Kylefile {
+                format!("  {}", ns.alias)
+            } else {
+                format!("  {} ({})", ns.alias, ns.file_type)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    anyhow::bail!(
+        "task not found: {task_input}\n\nDiscovered namespaces:\n{ns_list}\n\n  Use 'kyle <namespace>:{task_input}' to run a namespaced task."
+    );
 }
 
 fn run_local_task(cwd: &Path, task_name: &str, args: &[String]) -> Result<()> {
@@ -231,80 +567,6 @@ fn run_local_task(cwd: &Path, task_name: &str, args: &[String]) -> Result<()> {
     let mut runner = Runner::with_working_dir(kf, cwd.to_path_buf(), cwd.to_path_buf());
     runner.run(task_name, args)?;
     Ok(())
-}
-
-fn run_namespaced_task(
-    root: &Path,
-    namespace: &str,
-    task_name: &str,
-    args: &[String],
-) -> Result<()> {
-    let ns_dir = resolve_namespace(root, namespace);
-
-    if !ns_dir.exists() {
-        anyhow::bail!("Namespace directory not found: {}", ns_dir.display());
-    }
-
-    let (kf, _source) = load_from_dir(&ns_dir)
-        .with_context(|| format!("Failed to load Kylefile from namespace '{namespace}'"))?;
-
-    let mut runner = Runner::with_working_dir(kf, ns_dir, root.to_path_buf());
-    runner.run(task_name, args)?;
-    Ok(())
-}
-
-fn run_discovered_task(cwd: &Path, task_name: &str, args: &[String]) -> Result<()> {
-    let discovered = discover_namespaces(cwd);
-
-    if discovered.is_empty() {
-        anyhow::bail!(
-            "No Kylefile found in current directory.\n\n  Run 'kyle init' to create one."
-        );
-    }
-
-    let mut matches = Vec::new();
-    for ns in &discovered {
-        if let Ok((kf, _)) = load_from_dir(&ns.path)
-            && kf.tasks.contains_key(task_name)
-        {
-            matches.push((ns, kf));
-        }
-    }
-
-    match matches.len() {
-        0 => {
-            let ns_list: String = discovered
-                .iter()
-                .map(|ns| {
-                    if ns.file_type == FileType::Kylefile {
-                        format!("  {}", ns.alias)
-                    } else {
-                        format!("  {} ({})", ns.alias, ns.file_type)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            anyhow::bail!(
-                "Task '{task_name}' not found.\n\nDiscovered namespaces:\n{ns_list}\n\n  Use 'kyle <namespace>:{task_name}' to run a namespaced task."
-            );
-        }
-        1 => {
-            let (ns, kf) = matches.into_iter().next().unwrap();
-            let mut runner = Runner::with_working_dir(kf, ns.path.clone(), cwd.to_path_buf());
-            runner.run(task_name, args)?;
-            Ok(())
-        }
-        _ => {
-            let ns_list: String = matches
-                .iter()
-                .map(|(ns, _)| format!("  {}:{} ({})", ns.alias, task_name, ns.file_type))
-                .collect::<Vec<_>>()
-                .join("\n");
-            anyhow::bail!(
-                "Task '{task_name}' found in multiple namespaces:\n{ns_list}\n\n  Use the full name to pick one."
-            );
-        }
-    }
 }
 
 fn list_all_tasks(cwd: &Path) -> Result<()> {

@@ -107,6 +107,7 @@ desc = "build"
             run: "src/manage.py".into(),
             dispatcher: Some(Dispatcher {
                 extension: "django".into(),
+                exec_prefix: "src/manage.py".into(),
                 subcommands: subs,
             }),
             ..Default::default()

@@ -633,7 +633,9 @@ fn parent_conflicting_task_names_error() {
         .arg("build")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("multiple namespaces"));
+        .stderr(predicate::str::contains("ambiguous"))
+        .stderr(predicate::str::contains("kyle frontend:build"))
+        .stderr(predicate::str::contains("kyle backend:build"));
 }
 
 #[test]

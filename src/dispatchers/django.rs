@@ -78,6 +78,17 @@ impl DispatcherExtension for DjangoExtension {
         let root = manage_py.parent().unwrap_or(ctx.dir);
         scan_commands(root)
     }
+
+    fn exec_prefix(&self, ctx: &DispatcherContext<'_>) -> String {
+        match self.locate_manage_py(ctx) {
+            Some(manage_py) => manage_py
+                .strip_prefix(ctx.dir)
+                .unwrap_or(&manage_py)
+                .to_string_lossy()
+                .into_owned(),
+            None => "manage.py".to_string(),
+        }
+    }
 }
 
 fn scan_commands(root: &Path) -> Vec<Subcommand> {

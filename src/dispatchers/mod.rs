@@ -51,6 +51,8 @@ impl Subcommand {
 pub struct Dispatcher {
     pub extension: String,
     #[serde(default)]
+    pub exec_prefix: String,
+    #[serde(default)]
     pub subcommands: BTreeMap<String, Subcommand>,
 }
 
@@ -58,6 +60,7 @@ pub trait DispatcherExtension: Send + Sync {
     fn id(&self) -> &'static str;
     fn detect(&self, ctx: &DispatcherContext<'_>) -> bool;
     fn enumerate(&self, ctx: &DispatcherContext<'_>) -> Vec<Subcommand>;
+    fn exec_prefix(&self, ctx: &DispatcherContext<'_>) -> String;
 }
 
 pub struct DispatcherRegistry {
@@ -99,6 +102,7 @@ impl DispatcherRegistry {
                 .collect();
             return Some(Dispatcher {
                 extension: ext.id().to_string(),
+                exec_prefix: ext.exec_prefix(ctx),
                 subcommands,
             });
         }
@@ -151,6 +155,10 @@ mod tests {
         fn enumerate(&self, _ctx: &DispatcherContext<'_>) -> Vec<Subcommand> {
             self.enumerate_calls.fetch_add(1, Ordering::SeqCst);
             self.subs.clone()
+        }
+
+        fn exec_prefix(&self, _ctx: &DispatcherContext<'_>) -> String {
+            format!("run-{}", self.id)
         }
     }
 

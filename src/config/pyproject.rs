@@ -5,14 +5,37 @@ use std::collections::HashMap;
 pub fn parse(content: &str) -> Result<Kylefile, Error> {
     let doc: toml::Value = toml::from_str(content)?;
     let mut tasks = HashMap::new();
+    let mut found_shortcut_source = false;
 
-    // Try PDM scripts: [tool.pdm.scripts]
+    // PEP-621 [project.scripts] — console script entry points installed on
+    // PATH by build backends (pdm, hatch, setuptools, ...). Orthogonal to
+    // pdm/hatch/rye task shortcuts, so always additive.
+    if let Some(scripts) = doc
+        .get("project")
+        .and_then(|p| p.get("scripts"))
+        .and_then(|s| s.as_table())
+    {
+        for (name, val) in scripts {
+            if let Some(cmd) = val.as_str() {
+                tasks.insert(
+                    name.clone(),
+                    Task {
+                        run: cmd.to_string(),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+    }
+
+    // Task shortcut sources — pdm > hatch > rye, first found wins.
     if let Some(scripts) = doc
         .get("tool")
         .and_then(|t| t.get("pdm"))
         .and_then(|p| p.get("scripts"))
         .and_then(|s| s.as_table())
     {
+        found_shortcut_source = true;
         for (name, val) in scripts {
             if let Some(cmd) = extract_script_cmd(val) {
                 tasks.insert(
@@ -26,8 +49,7 @@ pub fn parse(content: &str) -> Result<Kylefile, Error> {
         }
     }
 
-    // Try Hatch scripts: [tool.hatch.envs.default.scripts]
-    if tasks.is_empty()
+    if !found_shortcut_source
         && let Some(scripts) = doc
             .get("tool")
             .and_then(|t| t.get("hatch"))
@@ -36,6 +58,7 @@ pub fn parse(content: &str) -> Result<Kylefile, Error> {
             .and_then(|d| d.get("scripts"))
             .and_then(|s| s.as_table())
     {
+        found_shortcut_source = true;
         for (name, val) in scripts {
             if let Some(cmd) = extract_script_cmd(val) {
                 tasks.insert(
@@ -49,13 +72,14 @@ pub fn parse(content: &str) -> Result<Kylefile, Error> {
         }
     }
 
-    if tasks.is_empty()
+    if !found_shortcut_source
         && let Some(scripts) = doc
             .get("tool")
             .and_then(|t| t.get("rye"))
             .and_then(|r| r.get("scripts"))
             .and_then(|s| s.as_table())
     {
+        found_shortcut_source = true;
         for (name, val) in scripts {
             if let Some(cmd) = extract_script_cmd(val) {
                 tasks.insert(
@@ -69,25 +93,14 @@ pub fn parse(content: &str) -> Result<Kylefile, Error> {
         }
     }
 
-    // Fallback: generate standard Python tasks
-    if tasks.is_empty() {
-        let name = doc
-            .get("project")
-            .and_then(|p| p.get("name"))
-            .and_then(|n| n.as_str())
-            .or_else(|| {
-                doc.get("tool")
-                    .and_then(|t| t.get("poetry"))
-                    .and_then(|p| p.get("name"))
-                    .and_then(|n| n.as_str())
-            })
-            .unwrap_or("");
-
-        return Ok(Kylefile {
-            name: name.to_string(),
-            tasks: standard_python_tasks(),
-            ..Default::default()
-        });
+    // Fallback to standard python tasks when no task shortcut source was
+    // found. [project.scripts] alone doesn't count — it's console entries,
+    // not task commands. Merge (don't replace) so project.scripts entries
+    // survive alongside the generated test/lint/format tasks.
+    if !found_shortcut_source {
+        for (name, task) in standard_python_tasks() {
+            tasks.entry(name).or_insert(task);
+        }
     }
 
     let name = doc
@@ -188,5 +201,41 @@ mod tests {
         let content = "[tool.pdm.scripts]\nserve = {cmd = \"python -m http.server\"}";
         let kf = parse(content).unwrap();
         assert_eq!(kf.tasks["serve"].run, "python -m http.server");
+    }
+
+    #[test]
+    fn parse_project_scripts_alongside_pdm() {
+        let content = r#"
+[project]
+name = "demo"
+
+[project.scripts]
+"ccm-admin" = "ccm.__main__:main"
+
+[tool.pdm.scripts]
+dev = "src/manage.py runserver"
+test = "pytest"
+"#;
+        let kf = parse(content).unwrap();
+        assert_eq!(kf.tasks["ccm-admin"].run, "ccm.__main__:main");
+        assert_eq!(kf.tasks["dev"].run, "src/manage.py runserver");
+        assert_eq!(kf.tasks["test"].run, "pytest");
+    }
+
+    #[test]
+    fn project_scripts_alone_does_not_skip_standard_fallback() {
+        // A pyproject with only [project.scripts] and no task shortcuts
+        // should still expose the standard python task set (test/lint/...).
+        let content = r#"
+[project]
+name = "demo"
+
+[project.scripts]
+"my-cli" = "my_pkg:main"
+"#;
+        let kf = parse(content).unwrap();
+        assert_eq!(kf.tasks["my-cli"].run, "my_pkg:main");
+        assert!(kf.tasks.contains_key("test"));
+        assert!(kf.tasks.contains_key("lint"));
     }
 }

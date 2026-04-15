@@ -54,6 +54,22 @@ impl KyleMcp {
                         output.push_str(&format!(" [deps: {}]", task.deps.join(", ")));
                     }
                     output.push('\n');
+                    if let Some(d) = &task.dispatcher
+                        && !d.subcommands.is_empty()
+                    {
+                        output.push_str(&format!(
+                            "    ({} dispatcher — {} subcommands)\n",
+                            d.extension,
+                            d.subcommands.len()
+                        ));
+                        for (sub_name, sub) in &d.subcommands {
+                            output.push_str(&format!("    {name}:{sub_name}"));
+                            if let Some(desc) = &sub.desc {
+                                output.push_str(&format!(" — {desc}"));
+                            }
+                            output.push('\n');
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -76,6 +92,17 @@ impl KyleMcp {
                             output.push_str(&format!(" — {}", task.desc));
                         }
                         output.push('\n');
+                        if let Some(d) = &task.dispatcher
+                            && !d.subcommands.is_empty()
+                        {
+                            for (sub_name, sub) in &d.subcommands {
+                                output.push_str(&format!("      {}:{name}:{sub_name}", ns.alias));
+                                if let Some(desc) = &sub.desc {
+                                    output.push_str(&format!(" — {desc}"));
+                                }
+                                output.push('\n');
+                            }
+                        }
                     }
                 }
             }

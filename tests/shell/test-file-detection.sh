@@ -154,7 +154,7 @@ mkdir -p backend
 echo '{"name":"backend","scripts":{"build":"echo building-backend","deploy":"echo deploying-backend"}}' > backend/package.json
 
 $KYLE deploy 2>&1 | grep -q "deploying-backend" && pass "ns: runs task unique to one child" || fail "ns: runs task unique to one child"
-$KYLE build 2>&1 | grep -q "multiple namespaces" && pass "ns: conflict error for ambiguous task" || fail "ns: conflict error for ambiguous task"
+$KYLE build 2>&1 | grep -q "ambiguous" && pass "ns: conflict error for ambiguous task" || fail "ns: conflict error for ambiguous task"
 $KYLE nonexistent 2>&1 | grep -q "not found" && pass "ns: task not found shows error" || fail "ns: task not found shows error"
 $KYLE nonexistent 2>&1 | grep -q "frontend" && pass "ns: task not found lists namespaces" || fail "ns: task not found lists namespaces"
 

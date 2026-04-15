@@ -195,6 +195,39 @@ impl Runner {
         Ok(())
     }
 
+    pub fn run_command(&self, label: &str, command: &str, args: &[String]) -> Result<(), Error> {
+        println!("→ {label}");
+
+        let cmd = if args.is_empty() {
+            command.to_string()
+        } else {
+            format!("{command} {}", args.join(" "))
+        };
+
+        let status = Command::new(SHELL)
+            .arg(SHELL_FLAG)
+            .arg(&cmd)
+            .current_dir(&self.working_dir)
+            .env("PATH", self.build_path())
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .map_err(|e| Error::ExecutionFailed {
+                task: label.into(),
+                source: e,
+            })?;
+
+        if !status.success() {
+            return Err(Error::ExecutionFailed {
+                task: label.into(),
+                source: io::Error::other(format!("exit code: {}", status.code().unwrap_or(-1))),
+            });
+        }
+
+        Ok(())
+    }
+
     pub fn kylefile(&self) -> &Kylefile {
         &self.kylefile
     }

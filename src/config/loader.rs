@@ -402,7 +402,10 @@ test = "pytest"
             &tmp.path().join("src/app/management/commands/exportxml.py"),
             "",
         );
-        write(&tmp.path().join("src/app/management/commands/migrate.py"), "");
+        write(
+            &tmp.path().join("src/app/management/commands/migrate.py"),
+            "",
+        );
 
         let (kf, source) = load_from_dir(tmp.path()).unwrap();
         assert_eq!(source, Source::PyProject);
@@ -414,7 +417,10 @@ test = "pytest"
         assert_eq!(names, vec!["exportxml".to_string(), "migrate".to_string()]);
 
         let test = kf.tasks.get("test").expect("test task missing");
-        assert!(test.dispatcher.is_none(), "pytest should not be a dispatcher");
+        assert!(
+            test.dispatcher.is_none(),
+            "pytest should not be a dispatcher"
+        );
     }
 
     #[test]
@@ -433,7 +439,10 @@ lint = "ruff check ."
 
         let (kf, _) = load_from_dir(tmp.path()).unwrap();
         for (name, task) in &kf.tasks {
-            assert!(task.dispatcher.is_none(), "{name} unexpectedly has dispatcher");
+            assert!(
+                task.dispatcher.is_none(),
+                "{name} unexpectedly has dispatcher"
+            );
         }
     }
 

@@ -120,6 +120,7 @@ kyle version / -v / --version     Print version
 src/
 ├── cli/          # CLI entry point, subcommands
 ├── config/       # File parsers (kylefile, makefile, justfile, package_json, etc.)
+├── dispatchers/  # Dispatcher extension system (Django, etc.)
 ├── mcp/          # MCP server (tools.rs = list_tasks + run_task)
 ├── namespace/    # Namespace resolution and auto-discovery
 ├── runner/       # Task execution engine with dependency resolution
@@ -129,4 +130,103 @@ tests/
 ├── cli.rs        # Integration tests
 └── shell/        # Shell-based integration tests
 docs/             # Nextra documentation site (bun, not npm)
+```
+
+## Working on Kyle
+
+When implementing changes on this repo, work this way. It keeps the main branch
+shippable at every step, makes diffs reviewable, and turns regressions into
+single-commit reverts.
+
+### 1. Explain before touching code
+
+For anything bigger than a one-line fix, state the plan in a few sentences
+before opening an editor: what's changing, what the tradeoff is, what the blast
+radius is. Wait for alignment. Don't pile on speculative scope or design for
+hypothetical future requirements.
+
+### 2. Break work into dependency-ordered stages
+
+A feature becomes a linear chain of stages where each one is independently
+reviewable and earlier stages enable later ones. Typical shape:
+
+1. Introduce scaffolding / new data types (no wiring)
+2. Extend existing types (no behaviour change)
+3. Implement the new logic (tested in isolation)
+4. Wire it into the pipeline (first user-visible change)
+5. Propagate to dependent subsystems (runner, CLI, completion)
+6. User-facing polish (docs, shell scripts)
+
+Mark exactly one stage in progress at a time. Finish it, commit it, verify it,
+then start the next.
+
+### 3. Test every stage before marking it complete
+
+Non-negotiable gates:
+
+- `cargo test` — all tests pass (lib + integration + doc)
+- `cargo clippy --all-targets -- -D warnings` — zero warnings
+- `tests/shell/*.sh` — run after `cargo build --release` when the stage
+  changes user-visible CLI behaviour
+- Manual smoke test against a real project when the change is a heuristic
+  or filesystem scan (e.g. run the Django dispatcher against
+  `/home/bfarahani/Surevoice/backend` and diff results against
+  `find … management/commands`)
+
+Each stage ships its own tests. Unit tests for pure logic, integration tests
+(lib tests that load real fixtures through the loader) for end-to-end
+behaviour, shell tests for the CLI surface.
+
+### 4. Side quests are first-class
+
+If a bug surfaces mid-stage that is adjacent to your current work (noisy
+auto-upgrade output during testing, pre-existing clippy warnings in
+`upgrade.rs`, etc.), stop, scope the fix as a discrete side quest, run the same
+gates on it, land it as its own commit, then resume the stage. Don't silently
+pile unrelated fixes into the main work, and don't silently defer them either.
+
+### 5. One commit per stage, message describes the actual change
+
+The commit subject should describe the schema or behaviour change that landed,
+not the incidental refactor around it. "feat: add `Task.dispatcher` field +
+`Dispatcher`/`Subcommand` serde types" beats "feat: dispatcher + main config
+file updates". Rule of thumb: if a reviewer reads only the subject, they should
+be able to predict the diff.
+
+### 6. Style conformance
+
+This repo follows `~/.claude/rules/rust/`. In short:
+
+- Run `cargo fmt` before every commit
+- Short, terse doc comments; no wall-of-prose, no speculative generality
+- Immutable-first: `let` by default, `&str`/`&[T]` in signatures, no cloning
+  to satisfy the borrow checker
+- Errors: `Result<T, E>` + `?`, `anyhow::Context` at application edges,
+  `thiserror` in library code, never `unwrap()` outside tests
+- No speculative abstractions: three similar lines is better than a premature
+  trait
+- No dead comments, no `// removed X` markers, no renamed `_var` shims
+
+### 7. End-of-stage summary
+
+After each stage, post a short status:
+
+- What landed (files touched, new modules, schema changes)
+- What's unchanged (explicitly — "still zero user-visible change" is useful)
+- Test totals (N lib + M integration passing, clippy clean, shell green)
+- What the user can verify manually if they want to
+- What's next
+
+This makes multi-stage work reviewable in retrospect and keeps the user in the
+loop without forcing them to read the diff.
+
+### Common commands
+
+```bash
+cargo test                                    # full suite
+cargo clippy --all-targets -- -D warnings     # clippy gate
+cargo build --release                         # required before shell tests
+bash tests/shell/test-namespaces.sh           # run a single shell test
+rm -f ~/.local/bin/kyle && \
+  cp target/release/kyle ~/.local/bin/kyle    # install locally (handles ETXTBSY)
 ```

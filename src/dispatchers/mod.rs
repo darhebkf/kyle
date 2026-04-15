@@ -1,3 +1,7 @@
+mod django;
+
+pub use django::DjangoExtension;
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -74,7 +78,9 @@ impl DispatcherRegistry {
     }
 
     pub fn builtin() -> Self {
-        Self::new()
+        let mut reg = Self::new();
+        reg.register(Box::new(DjangoExtension::new()));
+        reg
     }
 
     pub fn register(&mut self, ext: Box<dyn DispatcherExtension>) {

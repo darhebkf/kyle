@@ -5,10 +5,32 @@ use super::{
     standard, taskfile,
 };
 use crate::cli::RESERVED_COMMANDS;
+use crate::dispatchers::{DispatcherContext, DispatcherRegistry, SourceHint};
 use crate::output;
 use crate::settings;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
+
+static REGISTRY: LazyLock<DispatcherRegistry> = LazyLock::new(DispatcherRegistry::builtin);
+
+fn expand_dispatchers(kf: &mut Kylefile, dir: &Path, source: Source) {
+    let hint = source.hint();
+    for (name, task) in kf.tasks.iter_mut() {
+        if task.dispatcher.is_some() {
+            continue;
+        }
+        let ctx = DispatcherContext {
+            dir,
+            task_name: name,
+            command: &task.run,
+            source_hint: hint,
+        };
+        if let Some(dispatcher) = REGISTRY.try_expand(&ctx) {
+            task.dispatcher = Some(dispatcher);
+        }
+    }
+}
 
 const DEFAULT_FILENAMES: &[&str] = &["Kylefile", "Kylefile.yaml", "Kylefile.yml", "Kylefile.toml"];
 const FALLBACK_FILENAMES: &[&str] = &[
@@ -54,6 +76,19 @@ pub enum Source {
     Gradle,
     Maven,
     CMake,
+}
+
+impl Source {
+    fn hint(self) -> SourceHint {
+        match self {
+            Self::PyProject => SourceHint::PyProject,
+            Self::PackageJson => SourceHint::PackageJson,
+            Self::ComposerJson => SourceHint::ComposerJson,
+            Self::DenoJson => SourceHint::DenoJson,
+            Self::Kylefile => SourceHint::Kylefile,
+            _ => SourceHint::Other,
+        }
+    }
 }
 
 impl std::fmt::Display for Source {
@@ -223,6 +258,13 @@ fn find_by_extension(dir: &Path) -> Option<Result<(Kylefile, Source), Error>> {
 }
 
 fn load_file(path: &Path) -> Result<(Kylefile, Source), Error> {
+    let (mut kf, source) = load_file_inner(path)?;
+    let dir = path.parent().unwrap_or(Path::new("."));
+    expand_dispatchers(&mut kf, dir, source);
+    Ok((kf, source))
+}
+
+fn load_file_inner(path: &Path) -> Result<(Kylefile, Source), Error> {
     let content = fs::read_to_string(path)?;
 
     let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -327,4 +369,109 @@ fn detect_format_from_header(content: &str) -> String {
             Some(format.to_ascii_lowercase())
         })
         .unwrap_or_else(|| settings::get().default_format)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn write(path: &Path, content: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, content).unwrap();
+    }
+
+    #[test]
+    fn pyproject_task_gains_django_dispatcher() {
+        let tmp = TempDir::new().unwrap();
+        write(
+            &tmp.path().join("pyproject.toml"),
+            r#"[project]
+name = "demo"
+
+[tool.pdm.scripts]
+dev = "src/manage.py runserver"
+test = "pytest"
+"#,
+        );
+        write(&tmp.path().join("src/manage.py"), "#!/usr/bin/env python\n");
+        write(
+            &tmp.path().join("src/app/management/commands/exportxml.py"),
+            "",
+        );
+        write(&tmp.path().join("src/app/management/commands/migrate.py"), "");
+
+        let (kf, source) = load_from_dir(tmp.path()).unwrap();
+        assert_eq!(source, Source::PyProject);
+
+        let dev = kf.tasks.get("dev").expect("dev task missing");
+        let disp = dev.dispatcher.as_ref().expect("dev should be a dispatcher");
+        assert_eq!(disp.extension, "django");
+        let names: Vec<_> = disp.subcommands.keys().cloned().collect();
+        assert_eq!(names, vec!["exportxml".to_string(), "migrate".to_string()]);
+
+        let test = kf.tasks.get("test").expect("test task missing");
+        assert!(test.dispatcher.is_none(), "pytest should not be a dispatcher");
+    }
+
+    #[test]
+    fn pyproject_without_manage_py_has_no_dispatcher() {
+        let tmp = TempDir::new().unwrap();
+        write(
+            &tmp.path().join("pyproject.toml"),
+            r#"[project]
+name = "demo"
+
+[tool.pdm.scripts]
+test = "pytest"
+lint = "ruff check ."
+"#,
+        );
+
+        let (kf, _) = load_from_dir(tmp.path()).unwrap();
+        for (name, task) in &kf.tasks {
+            assert!(task.dispatcher.is_none(), "{name} unexpectedly has dispatcher");
+        }
+    }
+
+    #[test]
+    fn pyproject_entry_point_task_gains_dispatcher() {
+        let tmp = TempDir::new().unwrap();
+        write(
+            &tmp.path().join("pyproject.toml"),
+            r#"[project]
+name = "demo"
+
+[tool.pdm.scripts]
+ccm-admin = "ccm.__main__:main"
+"#,
+        );
+        write(&tmp.path().join("src/manage.py"), "");
+        write(&tmp.path().join("src/ccm/management/commands/doit.py"), "");
+
+        let (kf, _) = load_from_dir(tmp.path()).unwrap();
+        let task = kf.tasks.get("ccm-admin").unwrap();
+        let disp = task.dispatcher.as_ref().unwrap();
+        assert_eq!(disp.extension, "django");
+        assert!(disp.subcommands.contains_key("doit"));
+    }
+
+    #[test]
+    fn package_json_task_gets_no_django_dispatcher() {
+        let tmp = TempDir::new().unwrap();
+        // Even if there's a file named manage.py lying around, Django detection
+        // is gated on SourceHint::PyProject, so package.json tasks stay clean.
+        write(&tmp.path().join("manage.py"), "");
+        write(
+            &tmp.path().join("package.json"),
+            r#"{"scripts": {"start": "node src/manage.py"}}"#,
+        );
+
+        let (kf, source) = load_from_dir(tmp.path()).unwrap();
+        assert_eq!(source, Source::PackageJson);
+        assert!(kf.tasks.get("start").unwrap().dispatcher.is_none());
+    }
 }

@@ -62,4 +62,19 @@ mod tests {
         let kf = parse(content).unwrap();
         assert_eq!(kf.tasks["build"].run, "tsc && vite build");
     }
+
+    #[test]
+    fn parse_bun_workspaces_monorepo_root() {
+        // Bun/npm/pnpm workspaces — the root package.json often has no scripts
+        // of its own, just a workspaces field. Must not error.
+        let content = r#"{
+            "name": "root",
+            "private": true,
+            "workspaces": ["apps/*", "packages/*"],
+            "scripts": {"build": "bun run --filter '*' build"}
+        }"#;
+        let kf = parse(content).unwrap();
+        assert_eq!(kf.name, "root");
+        assert_eq!(kf.tasks["build"].run, "bun run --filter '*' build");
+    }
 }

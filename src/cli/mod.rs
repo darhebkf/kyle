@@ -43,9 +43,13 @@ pub struct Cli {
     #[arg(short = 'v', long = "version", action = clap::ArgAction::Version)]
     version: (),
 
-    /// Print task names (used by completion scripts)
+    /// Print task names (legacy — used by older completion scripts)
     #[arg(long, hide = true)]
     summary: bool,
+
+    /// Print full completion candidate set (reserved, tasks, namespaces, dispatcher subs)
+    #[arg(long, hide = true)]
+    completion_feed: bool,
 
     /// Internal: run a throttled auto-upgrade check in the background
     #[arg(long, hide = true)]
@@ -133,6 +137,10 @@ pub fn run() -> Result<()> {
         return print_summary();
     }
 
+    if cli.completion_feed {
+        return print_completion_feed();
+    }
+
     if cli.upgrade_check {
         upgrade::background_check();
         return Ok(());
@@ -193,6 +201,69 @@ fn print_summary() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn print_completion_feed() -> Result<()> {
+    let cwd = std::env::current_dir().context("Failed to get current directory")?;
+    let local = kylefile_config::load("").ok().map(|(kf, _)| kf);
+    let discovered = discover_namespaces(&cwd);
+    let mut discovered_kylefiles = Vec::new();
+    for ns in &discovered {
+        if let Ok((kf, _)) = load_from_dir(&ns.path) {
+            discovered_kylefiles.push((ns.alias.clone(), kf));
+        }
+    }
+    for candidate in build_completion_feed(local.as_ref(), &discovered_kylefiles) {
+        println!("{candidate}");
+    }
+    Ok(())
+}
+
+fn build_completion_feed(
+    local: Option<&crate::config::Kylefile>,
+    discovered: &[(String, crate::config::Kylefile)],
+) -> Vec<String> {
+    let mut out = std::collections::BTreeSet::new();
+
+    for cmd in RESERVED_COMMANDS {
+        out.insert((*cmd).to_string());
+    }
+
+    if let Some(kf) = local {
+        for (name, task) in &kf.tasks {
+            if RESERVED_COMMANDS.contains(&name.as_str()) {
+                continue;
+            }
+            out.insert(name.clone());
+
+            if let Some(d) = &task.dispatcher {
+                for sub_name in d.subcommands.keys() {
+                    out.insert(format!("{name}:{sub_name}"));
+                    if !kf.tasks.contains_key(sub_name) {
+                        out.insert(sub_name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    for (alias, kf) in discovered {
+        out.insert(format!("{alias}:"));
+        for (name, task) in &kf.tasks {
+            out.insert(format!("{alias}:{name}"));
+
+            if let Some(d) = &task.dispatcher {
+                for sub_name in d.subcommands.keys() {
+                    out.insert(format!("{alias}:{name}:{sub_name}"));
+                    if !kf.tasks.contains_key(sub_name) {
+                        out.insert(format!("{alias}:{sub_name}"));
+                    }
+                }
+            }
+        }
+    }
+
+    out.into_iter().collect()
 }
 
 fn run_tasks(task: Option<&str>, args: &[String]) -> Result<()> {
@@ -621,4 +692,150 @@ fn list_all_tasks(cwd: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Kylefile, Task};
+    use crate::dispatchers::{Dispatcher, Subcommand};
+    use std::collections::{BTreeMap, HashMap};
+
+    fn task(run: &str) -> Task {
+        Task {
+            run: run.into(),
+            ..Default::default()
+        }
+    }
+
+    fn dispatcher_task(run: &str, exec_prefix: &str, subs: &[&str]) -> Task {
+        let mut subcommands = BTreeMap::new();
+        for s in subs {
+            subcommands.insert((*s).to_string(), Subcommand::new(*s));
+        }
+        Task {
+            run: run.into(),
+            dispatcher: Some(Dispatcher {
+                extension: "django".into(),
+                exec_prefix: exec_prefix.into(),
+                subcommands,
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn kf(tasks: &[(&str, Task)]) -> Kylefile {
+        let mut map = HashMap::new();
+        for (name, t) in tasks {
+            map.insert((*name).to_string(), t.clone());
+        }
+        Kylefile {
+            tasks: map,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn feed_always_includes_reserved_commands() {
+        let feed = build_completion_feed(None, &[]);
+        for cmd in RESERVED_COMMANDS {
+            assert!(feed.contains(&cmd.to_string()), "missing {cmd}");
+        }
+    }
+
+    #[test]
+    fn feed_skips_user_tasks_shadowing_reserved_names() {
+        let local = kf(&[
+            ("upgrade", task("echo nope")),
+            ("build", task("cargo build")),
+        ]);
+        let feed = build_completion_feed(Some(&local), &[]);
+        assert!(feed.contains(&"build".to_string()));
+        // `upgrade` appears only as the reserved command — the user task is skipped.
+        assert_eq!(
+            feed.iter().filter(|s| *s == "upgrade").count(),
+            1,
+            "feed should dedupe reserved and user-task `upgrade`"
+        );
+    }
+
+    #[test]
+    fn feed_emits_dispatcher_subs_both_bare_and_qualified() {
+        let local = kf(&[(
+            "ccm-admin",
+            dispatcher_task(
+                "ccm.__main__:main",
+                "src/manage.py",
+                &["exportxml", "migrate"],
+            ),
+        )]);
+        let feed = build_completion_feed(Some(&local), &[]);
+        assert!(feed.contains(&"ccm-admin".to_string()));
+        assert!(feed.contains(&"ccm-admin:exportxml".to_string()));
+        assert!(feed.contains(&"ccm-admin:migrate".to_string()));
+        assert!(feed.contains(&"exportxml".to_string()));
+        assert!(feed.contains(&"migrate".to_string()));
+    }
+
+    #[test]
+    fn feed_shadowed_dispatcher_sub_not_emitted_bare() {
+        // Local task `format` shadows the dispatcher sub of the same name.
+        let local = kf(&[
+            ("format", task("black .")),
+            (
+                "dev",
+                dispatcher_task(
+                    "src/manage.py runserver",
+                    "src/manage.py",
+                    &["format", "seed"],
+                ),
+            ),
+        ]);
+        let feed = build_completion_feed(Some(&local), &[]);
+        assert!(feed.contains(&"format".to_string()));
+        assert!(feed.contains(&"dev:format".to_string()));
+        // Bare `seed` stays (not shadowed); `format` appears once because the
+        // user task shadows the dispatcher bare form.
+        assert!(feed.contains(&"seed".to_string()));
+        assert_eq!(
+            feed.iter().filter(|s| *s == "format").count(),
+            1,
+            "format should appear exactly once (local task, not dispatcher sub)"
+        );
+    }
+
+    #[test]
+    fn feed_namespace_prefixes_and_tasks() {
+        let backend = kf(&[("build", task("cargo build"))]);
+        let feed = build_completion_feed(None, &[("backend".into(), backend)]);
+        assert!(feed.contains(&"backend:".to_string()));
+        assert!(feed.contains(&"backend:build".to_string()));
+    }
+
+    #[test]
+    fn feed_namespace_dispatcher_subs() {
+        let backend = kf(&[(
+            "ccm-admin",
+            dispatcher_task("ccm.__main__:main", "src/manage.py", &["exportxml"]),
+        )]);
+        let feed = build_completion_feed(None, &[("backend".into(), backend)]);
+        assert!(feed.contains(&"backend:".to_string()));
+        assert!(feed.contains(&"backend:ccm-admin".to_string()));
+        assert!(feed.contains(&"backend:ccm-admin:exportxml".to_string()));
+        assert!(feed.contains(&"backend:exportxml".to_string()));
+    }
+
+    #[test]
+    fn feed_is_sorted_and_deduplicated() {
+        let local = kf(&[
+            ("build", task("cargo build")),
+            ("build", task("duplicate")), // won't collide — HashMap dedupes
+        ]);
+        let feed = build_completion_feed(Some(&local), &[]);
+        let mut sorted = feed.clone();
+        sorted.sort();
+        assert_eq!(feed, sorted, "feed must be sorted");
+        let unique: std::collections::HashSet<_> = feed.iter().collect();
+        assert_eq!(unique.len(), feed.len(), "feed must not contain duplicates");
+    }
 }

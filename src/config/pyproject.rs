@@ -131,8 +131,21 @@ fn extract_script_cmd(val: &toml::Value) -> Option<String> {
                 Some(cmds.join(" && "))
             }
         }
-        // PDM supports {cmd = "..."} format
-        toml::Value::Table(t) => t.get("cmd").and_then(|c| c.as_str()).map(String::from),
+        toml::Value::Table(t) => match t.get("cmd") {
+            Some(toml::Value::String(s)) => Some(s.clone()),
+            Some(toml::Value::Array(arr)) => {
+                let parts: Vec<String> = arr
+                    .iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect();
+                if parts.is_empty() {
+                    None
+                } else {
+                    Some(parts.join(" "))
+                }
+            }
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -201,6 +214,15 @@ mod tests {
         let content = "[tool.pdm.scripts]\nserve = {cmd = \"python -m http.server\"}";
         let kf = parse(content).unwrap();
         assert_eq!(kf.tasks["serve"].run, "python -m http.server");
+    }
+
+    #[test]
+    fn parse_pdm_cmd_array_format() {
+        let content = r#"[tool.pdm.scripts]
+format = {cmd = ["bash", "-c", "isort src ; black src"]}
+"#;
+        let kf = parse(content).unwrap();
+        assert_eq!(kf.tasks["format"].run, "bash -c isort src ; black src");
     }
 
     #[test]

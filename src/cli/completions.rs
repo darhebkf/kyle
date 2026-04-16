@@ -18,9 +18,6 @@ const BASH_COMPLETION: &str = r#"_kyle() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local commands="init config version upgrade mcp completions help"
-    local global_flags="-v --version -h --help"
-
     case "${prev}" in
         config)
             COMPREPLY=($(compgen -W "list get set path" -- "${cur}"))
@@ -33,8 +30,18 @@ const BASH_COMPLETION: &str = r#"_kyle() {
     esac
 
     if [[ ${COMP_CWORD} -eq 1 ]]; then
-        local tasks=$(kyle --summary 2>/dev/null)
-        COMPREPLY=($(compgen -W "${commands} ${tasks} ${global_flags}" -- "${cur}"))
+        local candidates
+        candidates=$(kyle --completion-feed 2>/dev/null)
+        COMPREPLY=($(compgen -W "${candidates}" -- "${cur}"))
+        # Trim any colon prefix from matches so bash (which word-breaks on `:`)
+        # presents the right suffix to the user.
+        if [[ "${cur}" == *:* && "${COMP_WORDBREAKS}" == *:* ]]; then
+            local colon_prefix="${cur%"${cur##*:}"}"
+            local i
+            for ((i=0; i<${#COMPREPLY[@]}; i++)); do
+                COMPREPLY[i]="${COMPREPLY[i]#"$colon_prefix"}"
+            done
+        fi
         return 0
     fi
 }
@@ -45,21 +52,10 @@ complete -F _kyle kyle
 const ZSH_COMPLETION: &str = r#"#compdef kyle
 
 _kyle() {
-    local -a commands tasks
-
-    commands=(
-        'init:Create a new Kylefile'
-        'config:Configure kyle settings'
-        'version:Print version'
-        'upgrade:Upgrade kyle to the latest version'
-        'completions:Generate shell completions'
-        'help:Print help'
-    )
-
     if (( CURRENT == 2 )); then
-        tasks=(${(f)"$(kyle --summary 2>/dev/null)"})
-        _describe 'command' commands
-        _describe 'task' tasks
+        local -a candidates
+        candidates=(${(f)"$(kyle --completion-feed 2>/dev/null)"})
+        _describe 'kyle candidate' candidates
     else
         case "${words[2]}" in
             config)
@@ -81,8 +77,8 @@ _kyle() {
 _kyle "$@"
 "#;
 
-const FISH_COMPLETION: &str = r#"function __kyle_tasks
-    kyle --summary 2>/dev/null
+const FISH_COMPLETION: &str = r#"function __kyle_candidates
+    kyle --completion-feed 2>/dev/null
 end
 
 function __kyle_needs_command
@@ -95,13 +91,7 @@ function __kyle_using_command
     test (count $cmd) -gt 1; and test $cmd[2] = $argv[1]
 end
 
-complete -c kyle -n __kyle_needs_command -a '(__kyle_tasks)' -d 'task'
-complete -c kyle -n __kyle_needs_command -a init -d 'Create a new Kylefile'
-complete -c kyle -n __kyle_needs_command -a config -d 'Configure kyle settings'
-complete -c kyle -n __kyle_needs_command -a version -d 'Print version'
-complete -c kyle -n __kyle_needs_command -a upgrade -d 'Upgrade kyle to the latest version'
-complete -c kyle -n __kyle_needs_command -a completions -d 'Generate shell completions'
-complete -c kyle -n __kyle_needs_command -a help -d 'Print help'
+complete -c kyle -n __kyle_needs_command -a '(__kyle_candidates)'
 
 complete -c kyle -n '__kyle_using_command config' -a 'list get set path'
 complete -c kyle -n '__kyle_using_command completions' -a 'bash zsh fish'

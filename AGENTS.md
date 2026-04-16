@@ -70,6 +70,10 @@ Kyle auto-detects tasks from these files (priority order):
 **Parsed** (scripts extracted from file content):
 - Makefile / justfile / Taskfile.yml / Rakefile
 - package.json / composer.json / deno.json / pyproject.toml
+- pyproject.toml `[project.scripts]` (PEP-621 console entry points)
+
+**Dispatcher extensions** (subcommands discovered from dispatcher tasks):
+- Django: tasks referencing manage.py or `[project.scripts]` entry points → management commands from `**/management/commands/*.py` exposed as `kyle <command>` or `kyle <dispatcher>:<command>`
 
 **Standard** (common commands generated automatically):
 - Cargo.toml → build, test, run, check, clippy, fmt
@@ -92,6 +96,22 @@ kyle services/api:dev     # Nested paths
 
 Namespaces are auto-discovered from subdirectories containing any supported task file.
 
+## Dispatcher Subcommands
+
+Some tasks are "dispatchers" — they proxy to an underlying tool (e.g. Django's manage.py) that accepts its own subcommands. Kyle discovers these and exposes them as first-class tasks:
+
+```bash
+kyle exportxml             # Resolves to src/manage.py exportxml
+kyle ccm-admin:exportxml   # Qualified form when ambiguous
+kyle backend:ccm-admin:exportxml  # From parent directory
+```
+
+Resolution rules:
+- Explicit local task shadows dispatcher sub with the same name
+- Local level shadows discovered namespaces
+- Same-exec-prefix dispatchers dedupe alphabetically
+- Ambiguous matches refuse to run and list qualified forms
+
 ## MCP Server
 
 Kyle includes a built-in MCP server for AI tool integration:
@@ -108,6 +128,7 @@ kyle                              List available tasks
 kyle <task> [args...]             Run a task (args passed through)
 kyle init [name] [--yaml|--toml]  Create a new Kylefile
 kyle upgrade                      Upgrade to latest version
+kyle upgrade --status             Show recent auto-upgrade activity
 kyle mcp [--config]               MCP server / print config
 kyle config list|get|set|path     Manage settings
 kyle completions <shell>          Shell completions (bash, zsh, fish)

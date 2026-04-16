@@ -2,6 +2,26 @@
 
 All notable changes to Kyle are documented here.
 
+## 0.2.0 — 2026-04-16 — Dispatcher Extensions & Shell Completion Overhaul
+
+### Added
+- **Dispatcher extension system** — pluggable trait for expanding "dispatcher" tasks (Django manage.py, etc.) into discoverable subcommands
+- **Django extension** — auto-detects manage.py and `[project.scripts]` entry points, enumerates management commands as subcommands (`kyle exportxml` instead of `pdm run ccm-admin exportxml`)
+- **`[project.scripts]` parsing** — PEP-621 console scripts now recognized as kyle tasks
+- **Full resolution cascade** — local tasks → dispatcher subs → namespace tasks → namespace dispatcher subs, with conflict detection and disambiguation syntax
+- **`--completion-feed`** — emits the full sorted candidate set for shell completion
+- **Rewritten shell completions** (bash/zsh/fish) — consumes the new feed, bash handles `:` word-break correctly
+- **`kyle upgrade --status`** — shows recent auto-upgrade activity
+
+### Fixed
+- Auto-upgrade no longer blocks every invocation (throttled 24h, background detach, silent log)
+- PDM `{cmd = [...]}` array format was silently dropped — now parsed correctly
+- Ambiguity errors now show qualified forms instead of just listing namespaces
+
+### Changed
+- Explicit local task shadows dispatcher sub with same name
+- MCP `list_tasks` enumerates dispatcher subcommands
+
 ## 0.1.10 — 2026-04-02 — Namespace Task Discovery
 
 ### Added

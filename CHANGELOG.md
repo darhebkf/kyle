@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-16 — Dispatcher Extensions & Shell Completion Overhaul
+
+### Added
+
+- **Dispatcher extension system** — pluggable trait for expanding "dispatcher" tasks (e.g. Django manage.py, Rails, artisan) into discoverable subcommands that kyle exposes as first-class tasks
+- **Django extension** — auto-detects manage.py and `[project.scripts]` entry points, enumerates management commands from `**/management/commands/*.py`, registers them as subcommands (`kyle exportxml` → `src/manage.py exportxml`)
+- **`[project.scripts]` parsing** — PEP-621 console script entry points (e.g. `ccm-admin = "ccm.__main__:main"`) are now recognized as kyle tasks alongside pdm/hatch/rye shortcuts
+- **Full resolution cascade** — `kyle <name>` searches local tasks → local dispatcher subcommands → discovered namespace tasks → namespace dispatcher subcommands, with conflict detection and qualified disambiguation syntax (`kyle ccm-admin:exportxml`, `kyle backend:ccm-admin:exportxml`)
+- **`--completion-feed`** hidden flag emitting the full sorted candidate set: reserved commands, local tasks, dispatcher subs (bare + qualified), namespace prefixes, namespaced tasks, and namespace dispatcher subs
+- **Rewritten shell completions** (bash/zsh/fish) consuming the new feed — bash handles `:` word-break correctly, all shells now complete dispatcher subcommands and namespace-qualified tasks
+- **`kyle upgrade --status`** — shows recent auto-upgrade activity from the log
+- **Bun workspace support verified** — shell test confirms bun projects work end-to-end via package.json parser
+
+### Fixed
+
+- **Auto-upgrade noise** — throttled to once per 24h via stamp file, detached via background re-exec, failures logged silently instead of printing to stderr on every invocation
+- **PDM `{cmd = [...]}` array format** — table-style scripts with cmd-as-array (e.g. `format = {cmd = ["bash", "-c", "isort src ; black src"]}`) were silently dropped; now parsed correctly
+- **Clippy warnings** — fixed pre-existing `uninlined_format_args` in upgrade.rs
+
+### Changed
+
+- **Precedence rules**: explicit local task shadows dispatcher sub with same name; local level shadows discovered namespaces; same-exec-prefix dispatchers dedupe alphabetically
+- **Ambiguity errors** now show all qualified forms the user can type instead of just listing namespaces
+- **MCP `list_tasks`** now enumerates dispatcher subcommands alongside regular tasks
+- **`--summary`** preserved for back-compat (task names only, excluding reserved commands)
+
 ## [0.1.10] - 2026-04-02
 
 ### Added
@@ -147,6 +173,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Install scripts for Unix and Windows
 - CI/CD with GitHub Actions
 
+[0.2.0]: https://github.com/darhebkf/kyle/compare/v0.1.10...v0.2.0
+[0.1.10]: https://github.com/darhebkf/kyle/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/darhebkf/kyle/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/darhebkf/kyle/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/darhebkf/kyle/compare/v0.1.6...v0.1.7

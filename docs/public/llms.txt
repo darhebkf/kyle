@@ -89,10 +89,10 @@ Kyle auto-detects and reads tasks from these files (in priority order):
 - `justfile`, `Justfile` — just recipes
 - `Taskfile.yml`, `Taskfile.yaml` — go-task tasks
 - `Rakefile` — Ruby rake tasks
-- `package.json` — npm scripts
+- `package.json` — npm/bun/pnpm scripts, workspaces supported
 - `composer.json` — PHP composer scripts
 - `deno.json`, `deno.jsonc` — Deno tasks
-- `pyproject.toml` — PDM/Hatch/Rye scripts, or fallback Python tasks
+- `pyproject.toml` — PDM/Hatch/Rye scripts + PEP-621 `[project.scripts]` console entries
 
 ### Standard (common commands generated automatically)
 - `Cargo.toml` — build, test, run, check, clippy, fmt
@@ -124,6 +124,45 @@ run = "echo deploying"
 
 Namespaces are auto-discovered from subdirectories containing any supported task file.
 
+## Dispatcher Subcommands
+
+Some tasks are "dispatchers" that proxy to an underlying tool with its own subcommands (e.g. Django's `manage.py`, installed via PDM/uv as a console script like `ccm-admin`). Kyle discovers these and exposes the subcommands as first-class tasks.
+
+```bash
+kyle exportxml             # Runs Django's manage.py exportxml directly
+kyle ccm-admin:exportxml   # Qualified form (always works)
+kyle backend:ccm-admin:exportxml  # From a parent directory
+```
+
+Resolution:
+- Explicit local task shadows dispatcher sub with the same name
+- Local level shadows discovered namespaces
+- Same-target dispatchers dedupe alphabetically
+- Ambiguous matches refuse to run and list qualified forms to pick from
+
+Currently Django is the only built-in dispatcher extension; the trait system accepts future extensions (Rails, artisan, etc.).
+
+## Task Arg Passthrough
+
+`kyle <task> <args...>` passes everything after the task name raw to the task — no `--` separator needed.
+
+```bash
+kyle ccm-admin --help          # Django's help
+kyle ccm-admin migrate --noinput
+kyle echo --flag1 value
+```
+
+Kyle only intercepts the first arg when it's a reserved command (`init`, `config`, etc.) or starts with `-`.
+
+## Reserved Command Collisions
+
+If a namespace dir or dispatcher subcommand has the same name as a reserved kyle command, kyle warns at listing time. To invoke it, use the qualified form or the `--dir` escape:
+
+```bash
+kyle --dir config:list    # Forces task-route resolution past the reserved 'config'
+kyle config:list          # Qualified form also works
+```
+
 ## MCP Server
 
 Kyle includes a built-in MCP server for AI tool integration.
@@ -135,8 +174,8 @@ kyle mcp --config     # Print config JSON for AI clients
 
 ### Tools
 
-- `list_tasks` — Returns all tasks with names, descriptions, deps, source type, and namespace tasks
-- `run_task` — Runs a task by name (supports namespaced tasks), returns stdout/stderr
+- `list_tasks` — Returns all tasks with names, descriptions, deps, source type, namespace tasks, and dispatcher subcommands grouped by app
+- `run_task` — Runs a task by name (supports namespaced tasks and dispatcher subcommands), returns stdout/stderr
 
 ### Setup
 
@@ -185,10 +224,12 @@ GitHub Copilot format (`.vscode/mcp.json`):
 ## CLI Reference
 
 ```
-kyle                              List available tasks
-kyle <task> [args...]             Run a task (args passed through)
+kyle                              List available tasks (grouped dispatcher subs shown)
+kyle <task> [args...]             Run a task (args passed through raw)
+kyle --dir <task> [args...]       Run a task even if it shadows a reserved name
 kyle init [name] [--yaml|--toml]  Create a new Kylefile
 kyle upgrade                      Upgrade to latest version
+kyle upgrade --status             Show recent auto-upgrade activity
 kyle mcp                          Start MCP server
 kyle mcp --config                 Print MCP config JSON
 kyle config list                  Show all settings

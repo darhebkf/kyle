@@ -112,6 +112,33 @@ Resolution rules:
 - Same-exec-prefix dispatchers dedupe alphabetically
 - Ambiguous matches refuse to run and list qualified forms
 
+## Task Arg Passthrough
+
+`kyle <task> <args...>` passes everything after the task name raw — no `--`
+separator needed. Kyle only consumes argv when argv[1] is a reserved command
+or starts with a leading `-`.
+
+```bash
+kyle ccm-admin --help          # runs: ccm-admin --help (Django's help)
+kyle ccm-admin help subcommand # runs: ccm-admin help subcommand
+kyle ccm-admin migrate         # runs: ccm-admin migrate
+```
+
+A leading `--` is stripped for back-compat with older docs but is no longer
+required.
+
+## Shadowing Collisions and --dir
+
+When a discovered namespace alias (or dispatcher subcommand) has the same
+name as a reserved command (`init`, `config`, `version`, `upgrade`, `mcp`,
+`completions`, `help`), kyle prints a warning at listing time. The reserved
+command still wins for the bare form. To invoke the shadowed target, use
+either the qualified form (`kyle config:list`) or the `--dir` escape:
+
+```bash
+kyle --dir config:list    # Forces task-route resolution
+```
+
 ## MCP Server
 
 Kyle includes a built-in MCP server for AI tool integration:

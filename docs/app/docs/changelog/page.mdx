@@ -2,6 +2,21 @@
 
 All notable changes to Kyle are documented here.
 
+## 0.2.1 — 2026-04-17
+
+### Added
+- Transparent task arg passthrough — `kyle ccm-admin --help` etc. no longer need `--` as a separator
+- `--dir <task>` escape for invoking namespaces or tasks whose names shadow reserved commands
+- Shadow warnings when a discovered namespace or dispatcher sub name collides with a reserved command
+- Context-aware TAB completion — `kyle ccm-admin <TAB>` suggests the dispatcher's subcommands
+- Grouped `kyle` listing: dispatcher subcommands are grouped by Django app (`[surevoice]`, `[dfs]`, ...) matching `ccm-admin help`
+- `--completion-for <task>` hidden flag for shell scripts
+
+### Fixed
+- `kyle ccm-admin` (bare) now runs correctly via the `[project.scripts]`-installed script instead of failing with a Python entry-point string
+- PDM `{cmd = [...]}` array-style scripts are no longer silently dropped
+- Release workflow SHA256SUMS file no longer missing platforms due to artifact filename collisions
+
 ## 0.2.0 — 2026-04-16 — Dispatcher Extensions & Shell Completion Overhaul
 
 ### Added

@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-04-17
+
+### Added
+
+- **Pre-clap task bypass** — `kyle <task> <args...>` passes everything past the task name raw to the task. `--help`, `--version`, `help`, etc. now work transparently as task arguments without needing `--` as a separator
+- **`--dir <task>` escape** — forces task-route resolution when a namespace alias or task name shadows a reserved command (e.g. `kyle --dir config:list`)
+- **Shadow warnings** — at `kyle` listing time, warn when a discovered namespace alias or dispatcher subcommand shadows a reserved command, with example invocation syntax
+- **Context-aware completion** — `kyle --completion-for <task>` emits dispatcher subcommands or namespace tasks for the given first-word. Bash/zsh/fish scripts now complete `kyle <task> <TAB>` with the task's valid next arguments
+- **Grouped `kyle` listing** — dispatcher subcommands display grouped by Django app (`[surevoice]`, `[dfs]`, ...), matching the layout of `ccm-admin help`. Equivalent dispatchers (same exec_prefix) dedupe to the alphabetically-first task name
+- **Django app-name metadata** — `Subcommand.group` field populated during scan from the `<app>/management/commands/` path segment
+
+### Fixed
+
+- **`kyle ccm-admin` (bare) failing with `sh: ccm.__main__:main: not found`** — `[project.scripts]` entries now store the script name as `run` (the actual invocable command after pdm/uv install), with the entry-point reference kept in a new internal `entry_point` field for dispatcher detection
+- **PDM `{cmd = [...]}` array format** — table-style scripts with cmd-as-array (e.g. `format = {cmd = ["bash", "-c", "isort src ; black src"]}`) were silently dropped; now parsed as space-joined
+- **Release workflow SHA256SUMS collision** — per-platform checksum files had identical names and overwrote each other when the release job merged artifacts, leaving `SHA256SUMS` with only one platform's checksum. Now per-platform files are named `checksums-<target>.txt` and the combine step globs them all
+
+### Changed
+
+- **Dispatcher detection split paths** — Django extension now detects via direct `manage.py` reference, entry-point metadata (new), or entry-point-shaped command (legacy)
+- **Dispatcher sub exec uses shebang** — the Django extension emits the plain `manage.py` path as `exec_prefix` (no interpreter hardcode); relies on the file's shebang + kyle's `.venv/bin` PATH prepending
+- **MCP `list_tasks`** now renders dispatcher subcommands grouped by app, matching the CLI listing
+
 ## [0.2.0] - 2026-04-16 — Dispatcher Extensions & Shell Completion Overhaul
 
 ### Added
@@ -173,6 +196,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Install scripts for Unix and Windows
 - CI/CD with GitHub Actions
 
+[0.2.1]: https://github.com/darhebkf/kyle/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/darhebkf/kyle/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/darhebkf/kyle/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/darhebkf/kyle/compare/v0.1.8...v0.1.9

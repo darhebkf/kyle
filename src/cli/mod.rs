@@ -6,6 +6,7 @@ mod upgrade;
 use crate::config::{self as kylefile_config, load_from_dir};
 use crate::namespace::discovery::{FileType, discover_namespaces};
 use crate::namespace::{parse_task_ref, resolve_namespace};
+use crate::output;
 use crate::runner::Runner;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -50,6 +51,12 @@ pub struct Cli {
     /// Print full completion candidate set (reserved, tasks, namespaces, dispatcher subs)
     #[arg(long, hide = true)]
     completion_feed: bool,
+
+    /// Print completion candidates for the arg position *after* a given task.
+    /// For a dispatcher task, emits its subcommands (bare and qualified).
+    /// For a namespace alias, emits the tasks inside that namespace.
+    #[arg(long, hide = true, value_name = "TASK")]
+    completion_for: Option<String>,
 
     /// Internal: run a throttled auto-upgrade check in the background
     #[arg(long, hide = true)]
@@ -131,6 +138,40 @@ enum ConfigAction {
 }
 
 pub fn run() -> Result<()> {
+    // Fast path: if argv[1] is a task name (not a kyle reserved command or
+    // flag), skip clap entirely so task args like `--help`, `--version`,
+    // `help`, or any subcommand name pass through transparently without
+    // needing `--` as a separator.
+    let argv: Vec<String> = std::env::args().collect();
+
+    // --dir escape: `kyle --dir <task> [args...]` forces task-route resolution
+    // even when <task> would otherwise be a reserved command or namespace
+    // alias that shadows one. Stays before the reserved-command check below.
+    if argv.get(1).map(String::as_str) == Some("--dir") {
+        let Some(task) = argv.get(2) else {
+            anyhow::bail!("--dir requires a task name\n\n  Example: kyle --dir config:list");
+        };
+        let task_args: Vec<String> = match argv.get(3) {
+            Some(s) if s == "--" => argv[4..].to_vec(),
+            _ => argv[3..].to_vec(),
+        };
+        upgrade::check_auto_upgrade();
+        return run_tasks(Some(task), &task_args);
+    }
+
+    if let Some(task) = argv.get(1)
+        && is_user_task_invocation(task)
+    {
+        // Strip a single leading `--` for back-compat — historically required
+        // to push args through clap; now purely optional.
+        let task_args: Vec<String> = match argv.get(2) {
+            Some(s) if s == "--" => argv[3..].to_vec(),
+            _ => argv[2..].to_vec(),
+        };
+        upgrade::check_auto_upgrade();
+        return run_tasks(Some(task), &task_args);
+    }
+
     let cli = Cli::parse();
 
     if cli.summary {
@@ -139,6 +180,10 @@ pub fn run() -> Result<()> {
 
     if cli.completion_feed {
         return print_completion_feed();
+    }
+
+    if let Some(ref task) = cli.completion_for {
+        return print_completion_for(task);
     }
 
     if cli.upgrade_check {
@@ -192,6 +237,18 @@ pub fn run() -> Result<()> {
     }
 }
 
+// Is this argument clearly a user task rather than a kyle-level flag or
+// reserved command? If yes, clap is bypassed so task args pass through raw.
+fn is_user_task_invocation(arg: &str) -> bool {
+    if arg.starts_with('-') {
+        return false;
+    }
+    if RESERVED_COMMANDS.contains(&arg) {
+        return false;
+    }
+    true
+}
+
 fn print_summary() -> Result<()> {
     if let Ok((kf, _)) = kylefile_config::load("") {
         for name in kf.tasks.keys() {
@@ -199,6 +256,49 @@ fn print_summary() -> Result<()> {
                 println!("{name}");
             }
         }
+    }
+    Ok(())
+}
+
+fn print_completion_for(task: &str) -> Result<()> {
+    let cwd = std::env::current_dir().context("Failed to get current directory")?;
+    let local = kylefile_config::load("").ok().map(|(kf, _)| kf);
+
+    let mut out = std::collections::BTreeSet::new();
+
+    // If `task` is a local task with a dispatcher, emit its subcommands.
+    if let Some(ref kf) = local
+        && let Some(t) = kf.tasks.get(task)
+        && let Some(d) = &t.dispatcher
+    {
+        for sub_name in d.subcommands.keys() {
+            out.insert(sub_name.clone());
+        }
+    }
+
+    // If `task` is a discovered namespace alias, emit its tasks (and nested
+    // dispatcher subs as qualified forms).
+    for ns in discover_namespaces(&cwd) {
+        if ns.alias != task {
+            continue;
+        }
+        if let Ok((kf, _)) = load_from_dir(&ns.path) {
+            for (name, ns_task) in &kf.tasks {
+                out.insert(name.clone());
+                if let Some(d) = &ns_task.dispatcher {
+                    for sub_name in d.subcommands.keys() {
+                        out.insert(format!("{name}:{sub_name}"));
+                        if !kf.tasks.contains_key(sub_name) {
+                            out.insert(sub_name.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for cand in out {
+        println!("{cand}");
     }
     Ok(())
 }
@@ -640,15 +740,98 @@ fn run_local_task(cwd: &Path, task_name: &str, args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn print_deduped_dispatcher_subs(kf: &crate::config::Kylefile) {
+    let mut entries: Vec<(&String, &crate::dispatchers::Dispatcher)> = kf
+        .tasks
+        .iter()
+        .filter_map(|(name, task)| {
+            task.dispatcher
+                .as_ref()
+                .filter(|d| !d.subcommands.is_empty())
+                .map(|d| (name, d))
+        })
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut seen_prefixes = std::collections::HashSet::new();
+    for (name, d) in entries {
+        if !seen_prefixes.insert(d.exec_prefix.as_str()) {
+            continue;
+        }
+        print_dispatcher_subs(name, d);
+    }
+}
+
+fn print_dispatcher_subs(task_name: &str, d: &crate::dispatchers::Dispatcher) {
+    println!(
+        "\n{task_name} ({} dispatcher — {} subcommands):",
+        d.extension,
+        d.subcommands.len()
+    );
+    let mut by_group: std::collections::BTreeMap<String, Vec<&crate::dispatchers::Subcommand>> =
+        std::collections::BTreeMap::new();
+    for sub in d.subcommands.values() {
+        let key = sub.group.clone().unwrap_or_else(|| "other".to_string());
+        by_group.entry(key).or_default().push(sub);
+    }
+    for (group, subs) in &by_group {
+        println!("  [{group}]");
+        for sub in subs {
+            match &sub.desc {
+                Some(desc) => println!("    {} — {}", sub.name, desc),
+                None => println!("    {}", sub.name),
+            }
+        }
+    }
+}
+
+fn warn_shadowing(
+    kf: Option<&crate::config::Kylefile>,
+    discovered: &[crate::namespace::discovery::DiscoveredNamespace],
+) {
+    // Namespace aliases that shadow reserved commands.
+    for ns in discovered {
+        if RESERVED_COMMANDS.contains(&ns.alias.as_str()) {
+            output::warn(&format!(
+                "namespace '{0}' shadows built-in '{0}' — use 'kyle --dir {0}:<task>' or the qualified form 'kyle {0}:<task>' to access it",
+                ns.alias
+            ));
+        }
+    }
+
+    // Dispatcher subcommands that shadow reserved commands.
+    if let Some(kf) = kf {
+        let mut seen = std::collections::HashSet::new();
+        for (task_name, task) in &kf.tasks {
+            if let Some(d) = &task.dispatcher {
+                for sub_name in d.subcommands.keys() {
+                    if RESERVED_COMMANDS.contains(&sub_name.as_str())
+                        && seen.insert(sub_name.clone())
+                    {
+                        output::warn(&format!(
+                            "dispatcher '{task_name}' exposes subcommand '{sub_name}' that shadows built-in '{sub_name}' — use 'kyle {task_name}:{sub_name}' to invoke it"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn list_all_tasks(cwd: &Path) -> Result<()> {
     // Try to load local Kylefile
     let local_result = kylefile_config::load("");
 
     match local_result {
         Ok((kf, _source)) => {
+            let discovered = discover_namespaces(cwd);
+            warn_shadowing(Some(&kf), &discovered);
+
             println!("Available tasks:");
             let runner = Runner::new(kf.clone());
             runner.list_tasks();
+
+            print_deduped_dispatcher_subs(&kf);
 
             // Show namespaces from explicit includes
             if !kf.includes.is_empty() {
@@ -658,8 +841,6 @@ fn list_all_tasks(cwd: &Path) -> Result<()> {
                 }
             }
 
-            // Discover additional namespaces
-            let discovered = discover_namespaces(cwd);
             if !discovered.is_empty() {
                 println!("\nDiscovered namespaces:");
                 for ns in &discovered {
@@ -679,6 +860,7 @@ fn list_all_tasks(cwd: &Path) -> Result<()> {
                     "No Kylefile found in current directory.\n\n  Run 'kyle init' to create one."
                 );
             }
+            warn_shadowing(None, &discovered);
 
             println!("Discovered namespaces:");
             for ns in &discovered {

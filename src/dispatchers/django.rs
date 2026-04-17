@@ -53,6 +53,10 @@ impl DjangoExtension {
     }
 }
 
+fn entry_point_signals_django(entry_point: &str) -> bool {
+    DjangoExtension::looks_like_entry_point(entry_point)
+}
+
 impl DispatcherExtension for DjangoExtension {
     fn id(&self) -> &'static str {
         "django"
@@ -62,9 +66,23 @@ impl DispatcherExtension for DjangoExtension {
         if ctx.source_hint != SourceHint::PyProject {
             return false;
         }
+        // Path 1: task command directly references manage.py (pdm/hatch/rye scripts)
         if ctx.command.contains("manage.py") && self.locate_manage_py(ctx).is_some() {
             return true;
         }
+        // Path 2: task is a [project.scripts] entry whose entry_point module
+        // looks like a Django CLI wrapper — claim when manage.py is nearby.
+        if ctx
+            .entry_point
+            .map(entry_point_signals_django)
+            .unwrap_or(false)
+            && self.locate_manage_py(ctx).is_some()
+        {
+            return true;
+        }
+        // Path 3 (legacy): command itself looks like an entry point — keeps
+        // dispatcher detection working for pdm scripts that happen to be set
+        // to a raw entry-point reference rather than a manage.py path.
         if Self::looks_like_entry_point(ctx.command) && self.locate_manage_py(ctx).is_some() {
             return true;
         }
@@ -116,13 +134,27 @@ fn scan_commands(root: &Path) -> Vec<Subcommand> {
             if name.is_empty() || name.starts_with('_') {
                 return None;
             }
-            Some(Subcommand::new(name))
+            let sub = Subcommand::new(name);
+            match app_name_from_commands_path(e.path()) {
+                Some(group) => Some(sub.with_group(group)),
+                None => Some(sub),
+            }
         })
         .collect();
 
     subs.sort_by(|a, b| a.name.cmp(&b.name));
     subs.dedup_by(|a, b| a.name == b.name);
     subs
+}
+
+// Extract the Django app name from a management command path.
+// Path shape: `.../<app>/management/commands/<cmd>.py`
+// Returns `<app>` — the directory immediately before `management/`.
+fn app_name_from_commands_path(path: &Path) -> Option<String> {
+    let commands_dir = path.parent()?;
+    let management_dir = commands_dir.parent()?;
+    let app_dir = management_dir.parent()?;
+    app_dir.file_name()?.to_str().map(String::from)
 }
 
 #[cfg(test)]
@@ -141,6 +173,23 @@ mod tests {
             dir,
             task_name,
             command,
+            entry_point: None,
+            source_hint,
+        }
+    }
+
+    fn ctx_with_entry_point<'a>(
+        dir: &'a Path,
+        task_name: &'a str,
+        command: &'a str,
+        entry_point: &'a str,
+        source_hint: SourceHint,
+    ) -> DispatcherContext<'a> {
+        DispatcherContext {
+            dir,
+            task_name,
+            command,
+            entry_point: Some(entry_point),
             source_hint,
         }
     }
@@ -224,6 +273,35 @@ mod tests {
     }
 
     #[test]
+    fn accepts_project_scripts_task_via_entry_point_metadata() {
+        // Simulates a [project.scripts] parse result: run is the script name
+        // (so the bare task actually executes), entry_point carries the ref.
+        let tmp = TempDir::new().unwrap();
+        write_manage_py(tmp.path(), "src/manage.py");
+        let ext = DjangoExtension::new();
+        assert!(ext.detect(&ctx_with_entry_point(
+            tmp.path(),
+            "ccm-admin",
+            "ccm-admin",
+            "ccm.__main__:main",
+            SourceHint::PyProject,
+        )));
+    }
+
+    #[test]
+    fn rejects_project_scripts_task_without_manage_py() {
+        let tmp = TempDir::new().unwrap();
+        let ext = DjangoExtension::new();
+        assert!(!ext.detect(&ctx_with_entry_point(
+            tmp.path(),
+            "my-cli",
+            "my-cli",
+            "my_pkg:main",
+            SourceHint::PyProject,
+        )));
+    }
+
+    #[test]
     fn rejects_entry_point_without_manage_py() {
         let tmp = TempDir::new().unwrap();
         let ext = DjangoExtension::new();
@@ -277,6 +355,40 @@ mod tests {
         let subs = ext.enumerate(&ctx(tmp.path(), "dev", "manage.py", SourceHint::PyProject));
         let names: Vec<_> = subs.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, vec!["runjob"]);
+    }
+
+    #[test]
+    fn enumerate_tags_each_sub_with_its_app_group() {
+        let tmp = TempDir::new().unwrap();
+        write_manage_py(tmp.path(), "manage.py");
+        write_command(tmp.path(), "billing", "invoice");
+        write_command(tmp.path(), "dfs", "cleanup");
+        let ext = DjangoExtension::new();
+        let subs = ext.enumerate(&ctx(tmp.path(), "dev", "manage.py", SourceHint::PyProject));
+        let invoice = subs.iter().find(|s| s.name == "invoice").unwrap();
+        let cleanup = subs.iter().find(|s| s.name == "cleanup").unwrap();
+        assert_eq!(invoice.group.as_deref(), Some("billing"));
+        assert_eq!(cleanup.group.as_deref(), Some("dfs"));
+    }
+
+    #[test]
+    fn enumerate_tags_group_when_manage_py_in_src_and_app_nested() {
+        let tmp = TempDir::new().unwrap();
+        write_manage_py(tmp.path(), "src/manage.py");
+        let dir = tmp
+            .path()
+            .join("src/surevoice/surevoice/management/commands");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("exportxml.py"), "").unwrap();
+        let ext = DjangoExtension::new();
+        let subs = ext.enumerate(&ctx(
+            tmp.path(),
+            "dev",
+            "src/manage.py runserver",
+            SourceHint::PyProject,
+        ));
+        assert_eq!(subs.len(), 1);
+        assert_eq!(subs[0].group.as_deref(), Some("surevoice"));
     }
 
     #[test]

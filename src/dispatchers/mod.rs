@@ -21,6 +21,7 @@ pub struct DispatcherContext<'a> {
     pub dir: &'a Path,
     pub task_name: &'a str,
     pub command: &'a str,
+    pub entry_point: Option<&'a str>,
     pub source_hint: SourceHint,
 }
 
@@ -29,6 +30,8 @@ pub struct Subcommand {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 impl Subcommand {
@@ -36,6 +39,7 @@ impl Subcommand {
         Self {
             name: name.into(),
             desc: None,
+            group: None,
         }
     }
 
@@ -43,7 +47,13 @@ impl Subcommand {
         Self {
             name: name.into(),
             desc: Some(desc.into()),
+            group: None,
         }
+    }
+
+    pub fn with_group(mut self, group: impl Into<String>) -> Self {
+        self.group = Some(group.into());
+        self
     }
 }
 
@@ -167,6 +177,7 @@ mod tests {
             dir,
             task_name,
             command: "irrelevant",
+            entry_point: None,
             source_hint: SourceHint::PyProject,
         }
     }

@@ -24,6 +24,7 @@ fn expand_dispatchers(kf: &mut Kylefile, dir: &Path, source: Source) {
             dir,
             task_name: name,
             command: &task.run,
+            entry_point: task.entry_point.as_deref(),
             source_hint: hint,
         };
         if let Some(dispatcher) = REGISTRY.try_expand(&ctx) {

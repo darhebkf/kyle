@@ -7,8 +7,10 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, Content, ErrorData as McpError, ServerCapabilities, ServerInfo};
 use rmcp::{schemars, tool, tool_handler, tool_router};
 
-use crate::config::load_from_dir;
+use crate::config::{Kylefile, load_from_dir};
+use crate::dispatchers::Dispatcher;
 use crate::namespace::discovery::discover_namespaces;
+use std::collections::{BTreeMap, HashSet};
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct RunTaskParams {
@@ -54,23 +56,8 @@ impl KyleMcp {
                         output.push_str(&format!(" [deps: {}]", task.deps.join(", ")));
                     }
                     output.push('\n');
-                    if let Some(d) = &task.dispatcher
-                        && !d.subcommands.is_empty()
-                    {
-                        output.push_str(&format!(
-                            "    ({} dispatcher — {} subcommands)\n",
-                            d.extension,
-                            d.subcommands.len()
-                        ));
-                        for (sub_name, sub) in &d.subcommands {
-                            output.push_str(&format!("    {name}:{sub_name}"));
-                            if let Some(desc) = &sub.desc {
-                                output.push_str(&format!(" — {desc}"));
-                            }
-                            output.push('\n');
-                        }
-                    }
                 }
+                write_deduped_dispatcher_subs(&mut output, None, &kf);
             }
             Err(e) => {
                 output.push_str(&format!("No task file found: {e}\n"));
@@ -92,18 +79,8 @@ impl KyleMcp {
                             output.push_str(&format!(" — {}", task.desc));
                         }
                         output.push('\n');
-                        if let Some(d) = &task.dispatcher
-                            && !d.subcommands.is_empty()
-                        {
-                            for (sub_name, sub) in &d.subcommands {
-                                output.push_str(&format!("      {}:{name}:{sub_name}", ns.alias));
-                                if let Some(desc) = &sub.desc {
-                                    output.push_str(&format!(" — {desc}"));
-                                }
-                                output.push('\n');
-                            }
-                        }
                     }
+                    write_deduped_dispatcher_subs(&mut output, Some(&ns.alias), &kf);
                 }
             }
         }
@@ -156,6 +133,50 @@ impl KyleMcp {
             Err(e) => Ok(CallToolResult::error(vec![Content::text(format!(
                 "Failed to execute: {e}"
             ))])),
+        }
+    }
+}
+
+fn write_deduped_dispatcher_subs(output: &mut String, namespace: Option<&str>, kf: &Kylefile) {
+    let mut entries: Vec<(&String, &Dispatcher)> = kf
+        .tasks
+        .iter()
+        .filter_map(|(name, task)| {
+            task.dispatcher
+                .as_ref()
+                .filter(|d| !d.subcommands.is_empty())
+                .map(|d| (name, d))
+        })
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut seen = HashSet::new();
+    for (task_name, d) in entries {
+        if !seen.insert(d.exec_prefix.as_str()) {
+            continue;
+        }
+        let prefix = match namespace {
+            Some(ns) => format!("{ns}:{task_name}"),
+            None => task_name.clone(),
+        };
+        output.push_str(&format!(
+            "\n{prefix} ({} dispatcher — {} subcommands):\n",
+            d.extension,
+            d.subcommands.len()
+        ));
+        let mut by_group: BTreeMap<String, Vec<&crate::dispatchers::Subcommand>> = BTreeMap::new();
+        for sub in d.subcommands.values() {
+            let key = sub.group.clone().unwrap_or_else(|| "other".to_string());
+            by_group.entry(key).or_default().push(sub);
+        }
+        for (group, subs) in &by_group {
+            output.push_str(&format!("  [{group}]\n"));
+            for sub in subs {
+                match &sub.desc {
+                    Some(desc) => output.push_str(&format!("    {} — {desc}\n", sub.name)),
+                    None => output.push_str(&format!("    {}\n", sub.name)),
+                }
+            }
         }
     }
 }

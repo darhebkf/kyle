@@ -7,20 +7,23 @@ pub fn parse(content: &str) -> Result<Kylefile, Error> {
     let mut tasks = HashMap::new();
     let mut found_shortcut_source = false;
 
-    // PEP-621 [project.scripts] — console script entry points installed on
-    // PATH by build backends (pdm, hatch, setuptools, ...). Orthogonal to
-    // pdm/hatch/rye task shortcuts, so always additive.
+    // PEP-621 [project.scripts] — console script entry points. The value is
+    // a Python import reference (e.g. "ccm.__main__:main"), not a shell
+    // command. Build backends install a script at PATH named after the key.
+    // Store the key as `run` (the invocable thing) and the reference as
+    // `entry_point` metadata for dispatcher detection.
     if let Some(scripts) = doc
         .get("project")
         .and_then(|p| p.get("scripts"))
         .and_then(|s| s.as_table())
     {
         for (name, val) in scripts {
-            if let Some(cmd) = val.as_str() {
+            if let Some(entry_ref) = val.as_str() {
                 tasks.insert(
                     name.clone(),
                     Task {
-                        run: cmd.to_string(),
+                        run: name.clone(),
+                        entry_point: Some(entry_ref.to_string()),
                         ..Default::default()
                     },
                 );
@@ -239,8 +242,15 @@ dev = "src/manage.py runserver"
 test = "pytest"
 "#;
         let kf = parse(content).unwrap();
-        assert_eq!(kf.tasks["ccm-admin"].run, "ccm.__main__:main");
+        // [project.scripts] entries: run is the script name (invocable via PATH
+        // after build-backend install), entry_point carries the reference.
+        assert_eq!(kf.tasks["ccm-admin"].run, "ccm-admin");
+        assert_eq!(
+            kf.tasks["ccm-admin"].entry_point.as_deref(),
+            Some("ccm.__main__:main")
+        );
         assert_eq!(kf.tasks["dev"].run, "src/manage.py runserver");
+        assert!(kf.tasks["dev"].entry_point.is_none());
         assert_eq!(kf.tasks["test"].run, "pytest");
     }
 
@@ -256,7 +266,11 @@ name = "demo"
 "my-cli" = "my_pkg:main"
 "#;
         let kf = parse(content).unwrap();
-        assert_eq!(kf.tasks["my-cli"].run, "my_pkg:main");
+        assert_eq!(kf.tasks["my-cli"].run, "my-cli");
+        assert_eq!(
+            kf.tasks["my-cli"].entry_point.as_deref(),
+            Some("my_pkg:main")
+        );
         assert!(kf.tasks.contains_key("test"));
         assert!(kf.tasks.contains_key("lint"));
     }

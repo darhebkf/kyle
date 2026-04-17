@@ -12,6 +12,10 @@ pub struct Task {
     pub deps: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dispatcher: Option<Dispatcher>,
+    /// PEP-621 entry-point reference (e.g. "ccm.__main__:main") for tasks
+    /// sourced from [project.scripts]. Internal metadata — not user-authored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_point: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]

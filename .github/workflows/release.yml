@@ -68,14 +68,14 @@ jobs:
       - name: Generate checksum
         if: matrix.platform.archive == 'tar.gz'
         run: |
-          sha256sum kyle-${{ matrix.platform.target }}.tar.gz >> checksums.txt
+          sha256sum kyle-${{ matrix.platform.target }}.tar.gz > checksums-${{ matrix.platform.target }}.txt
 
       - name: Generate checksum (Windows)
         if: matrix.platform.archive == 'zip'
         shell: pwsh
         run: |
           $hash = (Get-FileHash -Algorithm SHA256 "kyle-${{ matrix.platform.target }}.zip").Hash.ToLower()
-          "$hash  kyle-${{ matrix.platform.target }}.zip" | Out-File -Append -Encoding utf8 checksums.txt
+          "$hash  kyle-${{ matrix.platform.target }}.zip" | Out-File -Encoding utf8 checksums-${{ matrix.platform.target }}.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -83,7 +83,7 @@ jobs:
           name: kyle-${{ matrix.platform.target }}
           path: |
             kyle-${{ matrix.platform.target }}.${{ matrix.platform.archive }}
-            checksums.txt
+            checksums-${{ matrix.platform.target }}.txt
 
   release:
     name: Create Release
@@ -101,7 +101,7 @@ jobs:
 
       - name: Combine checksums
         run: |
-          cat artifacts/checksums.txt | sort > SHA256SUMS
+          cat artifacts/checksums-*.txt | sort > SHA256SUMS
 
       - name: Create release
         uses: softprops/action-gh-release@v2

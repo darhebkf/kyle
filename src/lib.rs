@@ -6,3 +6,4 @@ pub mod namespace;
 pub mod output;
 pub mod runner;
 pub mod settings;
+pub mod suggest;

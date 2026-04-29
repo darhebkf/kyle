@@ -11,6 +11,8 @@ const CONFIG_FILE: &str = "config.toml";
 const DEFAULT_FORMAT: &str = "toml";
 const ALLOWED_FORMATS: &[&str] = &["yaml", "toml"];
 const ALLOWED_BOOLS: &[&str] = &["true", "false"];
+const ALLOWED_AUTOCORRECT_MODES: &[&str] = &["off", "suggest", "autocorrect"];
+const DEFAULT_AUTOCORRECT: &str = "suggest";
 
 static CONFIG_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
     dirs::home_dir()
@@ -28,6 +30,8 @@ pub struct Settings {
     pub auto_upgrade: bool,
     #[serde(default = "default_true")]
     pub verify_updates: bool,
+    #[serde(default = "default_autocorrect")]
+    pub autocorrect: String,
 }
 
 fn default_true() -> bool {
@@ -38,12 +42,17 @@ fn default_format() -> String {
     DEFAULT_FORMAT.into()
 }
 
+fn default_autocorrect() -> String {
+    DEFAULT_AUTOCORRECT.into()
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
             default_format: default_format(),
             auto_upgrade: false,
             verify_updates: true,
+            autocorrect: default_autocorrect(),
         }
     }
 }
@@ -111,6 +120,16 @@ pub fn set(key: &str, value: &str) -> Result<(), Error> {
             }
             settings.verify_updates = value == "true";
         }
+        "autocorrect" => {
+            if !ALLOWED_AUTOCORRECT_MODES.contains(&value) {
+                return Err(Error::InvalidValue {
+                    key: key.into(),
+                    value: value.into(),
+                    allowed: ALLOWED_AUTOCORRECT_MODES.join(", "),
+                });
+            }
+            settings.autocorrect = value.into();
+        }
         _ => return Err(Error::UnknownKey(key.into())),
     }
 
@@ -124,6 +143,7 @@ pub fn get_value(key: &str) -> Result<String, Error> {
         "default_format" => Ok(settings.default_format),
         "auto_upgrade" => Ok(settings.auto_upgrade.to_string()),
         "verify_updates" => Ok(settings.verify_updates.to_string()),
+        "autocorrect" => Ok(settings.autocorrect),
         _ => Err(Error::UnknownKey(key.into())),
     }
 }
@@ -151,5 +171,6 @@ pub fn list() -> HashMap<&'static str, String> {
         ("default_format", settings.default_format),
         ("auto_upgrade", settings.auto_upgrade.to_string()),
         ("verify_updates", settings.verify_updates.to_string()),
+        ("autocorrect", settings.autocorrect),
     ])
 }

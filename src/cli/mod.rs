@@ -8,6 +8,8 @@ use crate::namespace::discovery::{FileType, discover_namespaces};
 use crate::namespace::{parse_task_ref, resolve_namespace};
 use crate::output;
 use crate::runner::Runner;
+use crate::settings;
+use crate::suggest;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
@@ -387,10 +389,10 @@ fn run_tasks(task: Option<&str>, args: &[String]) -> Result<()> {
 
     let task_ref = parse_task_ref(task_input);
     if let Some(prefix) = &task_ref.namespace {
-        return run_qualified(&cwd, prefix, &task_ref.task_name, args);
+        return run_qualified(&cwd, prefix, &task_ref.task_name, args, true);
     }
 
-    run_flat(&cwd, task_input, args)
+    run_flat(&cwd, task_input, args, true)
 }
 
 #[derive(Debug)]
@@ -439,7 +441,7 @@ impl FlatMatch {
     }
 }
 
-fn run_flat(cwd: &Path, task_input: &str, args: &[String]) -> Result<()> {
+fn run_flat(cwd: &Path, task_input: &str, args: &[String], allow_correct: bool) -> Result<()> {
     let local = kylefile_config::load("").ok().map(|(kf, _)| kf);
     let discovered = discover_namespaces(cwd);
 
@@ -501,6 +503,22 @@ fn run_flat(cwd: &Path, task_input: &str, args: &[String]) -> Result<()> {
     }
 
     if ns_matches.is_empty() {
+        if allow_correct {
+            let candidates = build_suggestion_candidates(local.as_ref(), &discovered);
+            match decide_autocorrect(task_input, &candidates) {
+                AutocorrectAction::Run(corrected) => {
+                    eprintln!("kyle: running '{corrected}' (corrected from '{task_input}')");
+                    return run_flat(cwd, &corrected, args, false);
+                }
+                AutocorrectAction::Suggest(names) => {
+                    anyhow::bail!(
+                        "task not found: {task_input}\n\n  {}",
+                        format_did_you_mean(&names)
+                    );
+                }
+                AutocorrectAction::Plain => {}
+            }
+        }
         return bail_not_found(cwd, task_input, local.is_some(), &discovered);
     }
     resolve_level(cwd, task_input, dedupe_matches(ns_matches), args)
@@ -612,7 +630,13 @@ fn execute_flat(cwd: &Path, m: FlatMatch, args: &[String]) -> Result<()> {
     }
 }
 
-fn run_qualified(cwd: &Path, left: &str, right: &str, args: &[String]) -> Result<()> {
+fn run_qualified(
+    cwd: &Path,
+    left: &str,
+    right: &str,
+    args: &[String],
+    allow_correct: bool,
+) -> Result<()> {
     // Case 1: left is a real namespace directory — resolve right inside it
     let ns_dir = resolve_namespace(cwd, left);
     if ns_dir.exists() {
@@ -635,7 +659,29 @@ fn run_qualified(cwd: &Path, left: &str, right: &str, args: &[String]) -> Result
             .collect();
 
         match subs.len() {
-            0 => anyhow::bail!("task not found: '{right}' in namespace '{left}'"),
+            0 => {
+                if allow_correct {
+                    let candidates = candidates_within_namespace(&kf);
+                    match decide_autocorrect(right, &candidates) {
+                        AutocorrectAction::Run(corrected) => {
+                            eprintln!(
+                                "kyle: running '{left}:{corrected}' (corrected from '{left}:{right}')"
+                            );
+                            return run_qualified(cwd, left, &corrected, args, false);
+                        }
+                        AutocorrectAction::Suggest(names) => {
+                            let qualified: Vec<String> =
+                                names.iter().map(|n| format!("{left}:{n}")).collect();
+                            anyhow::bail!(
+                                "task not found: '{right}' in namespace '{left}'\n\n  {}",
+                                format_did_you_mean(&qualified)
+                            );
+                        }
+                        AutocorrectAction::Plain => {}
+                    }
+                }
+                anyhow::bail!("task not found: '{right}' in namespace '{left}'")
+            }
             1 => {
                 let dispatcher_task = subs.into_iter().next().unwrap();
                 return run_dispatcher_sub(
@@ -816,6 +862,118 @@ fn warn_shadowing(
             }
         }
     }
+}
+
+enum AutocorrectAction {
+    Run(String),
+    Suggest(Vec<String>),
+    Plain,
+}
+
+fn decide_autocorrect(input: &str, candidates: &[String]) -> AutocorrectAction {
+    let mode = settings::get().autocorrect;
+    if mode == "off" {
+        return AutocorrectAction::Plain;
+    }
+
+    let suggestions = suggest::suggest(input, candidates);
+    if suggestions.is_empty() {
+        return AutocorrectAction::Plain;
+    }
+
+    if mode == "autocorrect"
+        && let Some(best) = suggest::best_unambiguous(input, candidates)
+        && !RESERVED_COMMANDS.contains(&best.candidate.as_str())
+    {
+        return AutocorrectAction::Run(best.candidate);
+    }
+
+    let names: Vec<String> = suggestions
+        .into_iter()
+        .take(3)
+        .map(|s| s.candidate)
+        .collect();
+    AutocorrectAction::Suggest(names)
+}
+
+fn format_did_you_mean(names: &[String]) -> String {
+    match names {
+        [one] => format!("Did you mean '{one}'? Run: kyle {one}"),
+        many => {
+            let list = many
+                .iter()
+                .map(|n| format!("    kyle {n}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("Did you mean one of:\n{list}")
+        }
+    }
+}
+
+fn build_suggestion_candidates(
+    local: Option<&crate::config::Kylefile>,
+    discovered: &[crate::namespace::discovery::DiscoveredNamespace],
+) -> Vec<String> {
+    let mut out = std::collections::BTreeSet::new();
+
+    if let Some(kf) = local {
+        for (name, task) in &kf.tasks {
+            if RESERVED_COMMANDS.contains(&name.as_str()) {
+                continue;
+            }
+            out.insert(name.clone());
+            if let Some(d) = &task.dispatcher {
+                for sub_name in d.subcommands.keys() {
+                    if !RESERVED_COMMANDS.contains(&sub_name.as_str())
+                        && !kf.tasks.contains_key(sub_name)
+                    {
+                        out.insert(sub_name.clone());
+                    }
+                    out.insert(format!("{name}:{sub_name}"));
+                }
+            }
+        }
+    }
+
+    for ns in discovered {
+        let Ok((kf, _)) = load_from_dir(&ns.path) else {
+            continue;
+        };
+        for (name, task) in &kf.tasks {
+            if !RESERVED_COMMANDS.contains(&name.as_str()) {
+                out.insert(name.clone());
+            }
+            out.insert(format!("{}:{}", ns.alias, name));
+            if let Some(d) = &task.dispatcher {
+                for sub_name in d.subcommands.keys() {
+                    if !RESERVED_COMMANDS.contains(&sub_name.as_str())
+                        && !kf.tasks.contains_key(sub_name)
+                    {
+                        out.insert(sub_name.clone());
+                    }
+                    out.insert(format!("{}:{}:{}", ns.alias, name, sub_name));
+                }
+            }
+        }
+    }
+
+    out.into_iter().collect()
+}
+
+fn candidates_within_namespace(kf: &crate::config::Kylefile) -> Vec<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for (name, task) in &kf.tasks {
+        out.insert(name.clone());
+        if let Some(d) = &task.dispatcher {
+            for sub_name in d.subcommands.keys() {
+                if !kf.tasks.contains_key(sub_name) {
+                    out.insert(sub_name.clone());
+                }
+                out.insert(format!("{name}:{sub_name}"));
+            }
+        }
+    }
+    out.into_iter().collect()
 }
 
 fn list_all_tasks(cwd: &Path) -> Result<()> {
@@ -1005,6 +1163,64 @@ mod tests {
         assert!(feed.contains(&"backend:ccm-admin".to_string()));
         assert!(feed.contains(&"backend:ccm-admin:exportxml".to_string()));
         assert!(feed.contains(&"backend:exportxml".to_string()));
+    }
+
+    #[test]
+    fn candidates_skip_reserved_local_tasks() {
+        let local = kf(&[
+            ("build", task("cargo build")),
+            ("upgrade", task("echo nope")), // shadows reserved — must be excluded as autocorrect target
+        ]);
+        let candidates = build_suggestion_candidates(Some(&local), &[]);
+        assert!(candidates.contains(&"build".to_string()));
+        assert!(!candidates.contains(&"upgrade".to_string()));
+    }
+
+    #[test]
+    fn candidates_include_local_dispatcher_subs_bare_and_qualified() {
+        let local = kf(&[(
+            "ccm-admin",
+            dispatcher_task(
+                "ccm.__main__:main",
+                "src/manage.py",
+                &["exportxml", "migrate"],
+            ),
+        )]);
+        let candidates = build_suggestion_candidates(Some(&local), &[]);
+        assert!(candidates.contains(&"ccm-admin".to_string()));
+        assert!(candidates.contains(&"ccm-admin:exportxml".to_string()));
+        assert!(candidates.contains(&"exportxml".to_string()));
+        assert!(candidates.contains(&"migrate".to_string()));
+    }
+
+    #[test]
+    fn candidates_within_namespace_covers_tasks_and_subs() {
+        let backend = kf(&[
+            ("build", task("cargo build")),
+            (
+                "ccm-admin",
+                dispatcher_task("ccm.__main__:main", "src/manage.py", &["exportxml"]),
+            ),
+        ]);
+        let candidates = candidates_within_namespace(&backend);
+        assert!(candidates.contains(&"build".to_string()));
+        assert!(candidates.contains(&"ccm-admin".to_string()));
+        assert!(candidates.contains(&"ccm-admin:exportxml".to_string()));
+        assert!(candidates.contains(&"exportxml".to_string()));
+    }
+
+    #[test]
+    fn did_you_mean_single() {
+        let msg = format_did_you_mean(&["build".into()]);
+        assert_eq!(msg, "Did you mean 'build'? Run: kyle build");
+    }
+
+    #[test]
+    fn did_you_mean_multiple_lists_each() {
+        let msg = format_did_you_mean(&["build".into(), "bind".into()]);
+        assert!(msg.starts_with("Did you mean one of:"));
+        assert!(msg.contains("kyle build"));
+        assert!(msg.contains("kyle bind"));
     }
 
     #[test]

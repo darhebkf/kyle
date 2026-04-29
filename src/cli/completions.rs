@@ -40,6 +40,16 @@ const BASH_COMPLETION: &str = r#"_kyle() {
 
     COMPREPLY=($(compgen -W "${candidates}" -- "${cur}"))
 
+    # Fuzzy fallback: if no prefix match for a non-empty input at the
+    # task-name position, ask kyle for fuzzy suggestions.
+    if [[ ${#COMPREPLY[@]} -eq 0 && -n "${cur}" && ${COMP_CWORD} -eq 1 ]]; then
+        local fuzzy
+        fuzzy=$(kyle --complete-fuzzy "${cur}" 2>/dev/null)
+        if [[ -n "${fuzzy}" ]]; then
+            COMPREPLY=($(compgen -W "${fuzzy}"))
+        fi
+    fi
+
     # Trim any colon prefix from matches so bash (which word-breaks on `:`)
     # presents the right suffix to the user.
     if [[ "${cur}" == *:* && "${COMP_WORDBREAKS}" == *:* ]]; then
@@ -61,6 +71,18 @@ _kyle() {
     local -a candidates
     if (( CURRENT == 2 )); then
         candidates=(${(f)"$(kyle --completion-feed 2>/dev/null)"})
+        # Prefix filter the candidate list against the current word.
+        local -a prefix_matches
+        local cur="${words[CURRENT]}"
+        local c
+        for c in $candidates; do
+            if [[ "$c" == "$cur"* ]]; then
+                prefix_matches+=("$c")
+            fi
+        done
+        if (( ${#prefix_matches[@]} == 0 && ${#cur} > 0 )); then
+            candidates=(${(f)"$(kyle --complete-fuzzy "$cur" 2>/dev/null)"})
+        fi
         _describe 'kyle candidate' candidates
         return
     fi
@@ -93,7 +115,20 @@ _kyle "$@"
 "#;
 
 const FISH_COMPLETION: &str = r#"function __kyle_candidates
-    kyle --completion-feed 2>/dev/null
+    set -l cur (commandline -ct)
+    set -l feed (kyle --completion-feed 2>/dev/null)
+    set -l matched
+    for c in $feed
+        switch $c
+            case "$cur*"
+                set matched $matched $c
+        end
+    end
+    if test (count $matched) -eq 0; and test -n "$cur"
+        kyle --complete-fuzzy $cur 2>/dev/null
+    else
+        printf '%s\n' $feed
+    end
 end
 
 function __kyle_sub_candidates

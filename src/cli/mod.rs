@@ -60,6 +60,11 @@ pub struct Cli {
     #[arg(long, hide = true, value_name = "TASK")]
     completion_for: Option<String>,
 
+    /// Emit fuzzy completion candidates when no prefix match exists.
+    /// Used by shell completion scripts as a fallback for typos.
+    #[arg(long, hide = true, value_name = "PARTIAL")]
+    complete_fuzzy: Option<String>,
+
     /// Internal: run a throttled auto-upgrade check in the background
     #[arg(long, hide = true)]
     upgrade_check: bool,
@@ -188,6 +193,10 @@ pub fn run() -> Result<()> {
         return print_completion_for(task);
     }
 
+    if let Some(ref partial) = cli.complete_fuzzy {
+        return print_complete_fuzzy(partial);
+    }
+
     if cli.upgrade_check {
         upgrade::background_check();
         return Ok(());
@@ -301,6 +310,20 @@ fn print_completion_for(task: &str) -> Result<()> {
 
     for cand in out {
         println!("{cand}");
+    }
+    Ok(())
+}
+
+fn print_complete_fuzzy(partial: &str) -> Result<()> {
+    if partial.is_empty() {
+        return Ok(());
+    }
+    let cwd = std::env::current_dir().context("Failed to get current directory")?;
+    let local = kylefile_config::load("").ok().map(|(kf, _)| kf);
+    let discovered = discover_namespaces(&cwd);
+    let candidates = build_suggestion_candidates(local.as_ref(), &discovered);
+    for s in suggest::suggest(partial, &candidates) {
+        println!("{}", s.candidate);
     }
     Ok(())
 }

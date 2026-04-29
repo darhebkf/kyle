@@ -58,6 +58,29 @@ Verify SHA256 checksums when downloading updates via `kyle upgrade`.
 kyle config set verify_updates false
 ```
 
+### `autocorrect`
+
+Behavior when you mistype a task name. Kyle uses Damerau-Levenshtein edit distance against your task list to detect typos (`buld` → `build`, `migrat` → `migrate`).
+
+| Value | Description |
+|-------|-------------|
+| `suggest` | Print "Did you mean ...?" and exit 1 (default) |
+| `off` | Plain "task not found" — no suggestion |
+| `autocorrect` | Print a stderr notice and run the corrected task |
+
+```bash
+kyle config set autocorrect autocorrect
+```
+
+Safety rules:
+
+- Reserved kyle commands (`upgrade`, `config`, etc.) are never auto-targeted.
+- Ambiguous matches (multiple equally-close candidates) fall back to `suggest` mode regardless of setting.
+- Distance threshold is 2 edits and a 50% match-ratio guard, so short or distant inputs never match.
+- Args are preserved across the autocorrect re-run: `kyle buld --force` runs `build --force`.
+
+Tab completion in your shell (bash/zsh/fish) also falls back to fuzzy matching when no prefix match exists. This works regardless of the `autocorrect` setting — pressing tab is itself a request for suggestions.
+
 ## Config File Format
 
 The config file is plain TOML:
@@ -66,6 +89,7 @@ The config file is plain TOML:
 default_format = "toml"
 auto_upgrade = false
 verify_updates = true
+autocorrect = "suggest"
 ```
 
 You can edit it directly if you prefer.

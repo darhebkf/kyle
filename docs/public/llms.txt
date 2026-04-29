@@ -247,8 +247,21 @@ kyle version                      Print version
 | `default_format` | `toml`, `yaml` | `toml` | Format for `kyle init` |
 | `auto_upgrade` | `true`, `false` | `false` | Auto-check for updates |
 | `verify_updates` | `true`, `false` | `true` | SHA256 verification on upgrade |
+| `autocorrect` | `suggest`, `off`, `autocorrect` | `suggest` | Behavior on mistyped task names |
 
 Config stored at `~/.config/kyle/config.toml`.
+
+## Typo Handling
+
+Kyle detects typos via Damerau-Levenshtein distance against your task list (max 2 edits, 50% match-ratio guard).
+
+- `suggest` (default): prints `Did you mean 'build'?` and exits 1.
+- `off`: plain `task not found` error.
+- `autocorrect`: prints a stderr notice (`kyle: running 'build' (corrected from 'buld')`) and runs the corrected task. Args are preserved.
+
+Reserved kyle commands (`upgrade`, `config`, etc.) are never auto-targeted. Ambiguous matches degrade to suggest mode regardless of setting.
+
+Tab completion in bash/zsh/fish also falls back to fuzzy matching when no prefix match exists — independent of the `autocorrect` setting.
 
 ## Common Patterns
 

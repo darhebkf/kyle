@@ -2,6 +2,20 @@
 
 All notable changes to Kyle are documented here.
 
+## 0.2.2 — 2026-04-30
+
+### Added
+- Autocorrect for mistyped task names with three modes: `suggest` (default, prints `Did you mean 'build'?`), `off` (plain not-found), `autocorrect` (runs the corrected task with a stderr notice). Configure via `kyle config set autocorrect <mode>`
+- Args preserved across autocorrect re-run: `kyle buld --force` runs `build --force`
+- Fuzzy tab completion in bash/zsh/fish — `kyle buld<TAB>` now suggests `build` when no prefix match exists
+- Install-time prompt for the autocorrect mode in `install.sh` and `install.ps1`
+
+### Safety
+- Reserved kyle commands (`upgrade`, `config`, ...) are never auto-targeted
+- Ambiguous matches at the best distance fall back to suggest mode regardless of setting
+- Damerau-Levenshtein distance ≤ 2 with a 50% match-ratio guard prevents short or distant inputs from matching
+- Namespaced inputs match per-segment so segment counts must align (`backed:tst` → `backend:test`, never `backend:build`)
+
 ## 0.2.1 — 2026-04-17
 
 ### Added

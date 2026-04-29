@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-04-30
+
+### Added
+
+- **Autocorrect for mistyped task names** — Damerau-Levenshtein matching against the local task list, dispatcher subcommands, and discovered namespaces. New `autocorrect` setting with three modes: `suggest` (default — print `Did you mean 'build'?` and exit 1), `off` (plain `task not found`), and `autocorrect` (print stderr notice and run the corrected task). Args are preserved across the re-run (`kyle buld --force` → `build --force`)
+- **Autocorrect safety guards** — reserved kyle commands (`upgrade`, `config`, ...) are never auto-targeted; ambiguous matches at the best distance fall back to suggest mode regardless of setting; distance ≤ 2 with a 50% match-ratio guard so short or distant inputs never match; namespaced inputs (`backed:tst`) match per-segment so segment counts must align
+- **Fuzzy tab completion** — when prefix completion in bash/zsh/fish returns nothing for a non-empty input, the completion script falls back to fuzzy matching via a new internal `--complete-fuzzy <PARTIAL>` flag. `kyle buld<TAB>` now offers `build`. Always-on regardless of the `autocorrect` setting
+- **Install-time prompt** — both `install.sh` and `install.ps1` ask `Autocorrect typos? [suggest/off/autocorrect]` after the auto-update prompt and persist the choice via `kyle config set autocorrect ...`
+
 ## [0.2.1] - 2026-04-17
 
 ### Added
@@ -196,6 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Install scripts for Unix and Windows
 - CI/CD with GitHub Actions
 
+[0.2.2]: https://github.com/darhebkf/kyle/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/darhebkf/kyle/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/darhebkf/kyle/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/darhebkf/kyle/compare/v0.1.9...v0.1.10

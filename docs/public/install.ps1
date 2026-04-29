@@ -83,6 +83,17 @@ function Install-Kyle {
             Write-Info "Auto-upgrade enabled"
         }
 
+        # Autocorrect
+        Write-Host ""
+        $answer = Read-Host "Autocorrect typos? [suggest/off/autocorrect] (suggest)"
+        switch ($answer) {
+            "off"         { & $exePath config set autocorrect off 2>$null; Write-Info "Autocorrect set to off" }
+            "autocorrect" { & $exePath config set autocorrect autocorrect 2>$null; Write-Info "Autocorrect set to autocorrect" }
+            "suggest"     { & $exePath config set autocorrect suggest 2>$null }
+            ""            { & $exePath config set autocorrect suggest 2>$null }
+            default       { Write-Warn "Unknown mode '$answer' — keeping default 'suggest'"; & $exePath config set autocorrect suggest 2>$null }
+        }
+
         # Shell completions
         Write-Host ""
         $answer = Read-Host "Install shell completions? [Y/n]"

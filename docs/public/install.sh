@@ -136,6 +136,22 @@ install() {
     fi
 
     echo ""
+    ask "Autocorrect typos? [suggest/off/autocorrect] (suggest):"
+    case "$REPLY" in
+        off|autocorrect)
+            "$INSTALL_DIR/kyle" config set autocorrect "$REPLY" 2>/dev/null && info "Autocorrect set to $REPLY"
+            ;;
+        ""|suggest)
+            # Default — explicitly persist so the value is visible in `kyle config list`
+            "$INSTALL_DIR/kyle" config set autocorrect suggest 2>/dev/null
+            ;;
+        *)
+            warn "Unknown mode '$REPLY' — keeping default 'suggest'"
+            "$INSTALL_DIR/kyle" config set autocorrect suggest 2>/dev/null
+            ;;
+    esac
+
+    echo ""
     ask "Install shell completions? [Y/n]"
     if [ "$REPLY" != "n" ] && [ "$REPLY" != "N" ]; then
         if [ -n "$profile" ]; then

@@ -185,6 +185,7 @@ Cursor: add to `~/.cursor/mcp.json`
 Windsurf: add to `~/.codeium/windsurf/mcp_config.json`
 Codex: `codex mcp add kyle -- kyle mcp` or `~/.codex/config.toml`
 Antigravity: add to `~/.gemini/antigravity/mcp_config.json`
+OpenCode: add to `~/.config/opencode/opencode.json`
 GitHub Copilot: add to `.vscode/mcp.json` (per-project, key is `servers` not `mcpServers`)
 
 JSON config format (Claude Desktop, Cursor, Windsurf, Antigravity):
@@ -195,6 +196,21 @@ JSON config format (Claude Desktop, Cursor, Windsurf, Antigravity):
     "kyle": {
       "command": "kyle",
       "args": ["mcp"]
+    }
+  }
+}
+```
+
+OpenCode format (`~/.config/opencode/opencode.json`):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "kyle": {
+      "type": "local",
+      "command": ["kyle", "mcp"],
+      "enabled": true
     }
   }
 }

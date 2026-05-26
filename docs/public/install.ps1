@@ -29,6 +29,25 @@ function Write-McpJson {
     }
 }
 
+function Write-OpenCodeMcpJson {
+    param($Dir, $File, $Config, $CommandPath)
+    if (Test-Path $File) {
+        Write-Warn "$File already exists - add kyle MCP manually:"
+        Write-Host ""
+        Write-Host '  "mcp": {'
+        Write-Host '    "kyle": {'
+        Write-Host '      "type": "local",'
+        Write-Host ('      "command": ["{0}", "mcp"],' -f $CommandPath)
+        Write-Host '      "enabled": true'
+        Write-Host '    }'
+        Write-Host '  }'
+    } else {
+        New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+        $Config | Out-File -FilePath $File -Encoding utf8
+        Write-Info "OpenCode MCP config written to $File"
+    }
+}
+
 function Install-Kyle {
     Write-Info "Detected platform: windows-x86_64 ($Target)"
 
@@ -118,10 +137,11 @@ function Install-Kyle {
             Write-Host "  4) Windsurf"
             Write-Host "  5) Codex (OpenAI)"
             Write-Host "  6) Antigravity (Google)"
-            Write-Host "  7) Other / manual"
-            Write-Host "  8) Skip"
+            Write-Host "  7) OpenCode (Anomaly)"
+            Write-Host "  8) Other / manual"
+            Write-Host "  9) Skip"
             Write-Host ""
-            $client = Read-Host "Select AI client [1-8]"
+            $client = Read-Host "Select AI client [1-9]"
 
             $mcpConfig = @{
                 mcpServers = @{
@@ -158,6 +178,20 @@ function Install-Kyle {
                 }
                 "6" { Write-McpJson "$env:USERPROFILE\.gemini\antigravity" "$env:USERPROFILE\.gemini\antigravity\mcp_config.json" $mcpConfig }
                 "7" {
+                    $openCodeConfig = @{
+                        '$schema' = "https://opencode.ai/config.json"
+                        mcp = @{
+                            kyle = @{
+                                type = "local"
+                                command = @($exePath, "mcp")
+                                enabled = $true
+                            }
+                        }
+                    } | ConvertTo-Json -Depth 5
+
+                    Write-OpenCodeMcpJson "$env:USERPROFILE\.config\opencode" "$env:USERPROFILE\.config\opencode\opencode.json" $openCodeConfig $exePath
+                }
+                "8" {
                     Write-Host ""
                     Write-Host "Add kyle MCP to your client's config. The server command is:"
                     Write-Host ""
@@ -170,6 +204,8 @@ function Install-Kyle {
                     Write-Host "                   [mcp_servers.kyle]"
                     Write-Host "                   command = `"$exePath`""
                     Write-Host "                   args = [`"mcp`"]"
+                    Write-Host "  OpenCode:        ~\.config\opencode\opencode.json"
+                    Write-Host "                   {`"mcp`":{`"kyle`":{`"type`":`"local`",`"command`":[`"$exePath`",`"mcp`"],`"enabled`":true}}}"
                     Write-Host ""
                     Write-Host "Or run 'kyle mcp --config' to get a JSON snippet."
                 }

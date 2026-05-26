@@ -18,7 +18,7 @@ curl -fsSL https://kylefile.dev/install.sh | sh
 
 ### Manual Setup
 
-<Tabs items={['Claude Code', 'Claude Desktop', 'Cursor', 'Windsurf', 'Codex', 'Antigravity', 'GitHub Copilot']}>
+<Tabs items={['Claude Code', 'Claude Desktop', 'Cursor', 'Windsurf', 'Codex', 'Antigravity', 'OpenCode', 'GitHub Copilot']}>
   <Tabs.Tab>
 
 Run this command (global scope — works in every project):
@@ -103,6 +103,24 @@ Add to `~/.gemini/antigravity/mcp_config.json`:
     "kyle": {
       "command": "kyle",
       "args": ["mcp"]
+    }
+  }
+}
+```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+
+Add to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "kyle": {
+      "type": "local",
+      "command": ["kyle", "mcp"],
+      "enabled": true
     }
   }
 }

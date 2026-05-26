@@ -19,6 +19,10 @@ TARGET_RESULT=$(echo "$INSTALL_FUNCS" | sh -c 'eval "$(cat)"; get_target linux x
 TARGET_RESULT=$(echo "$INSTALL_FUNCS" | sh -c 'eval "$(cat)"; get_target darwin aarch64' 2>/dev/null || true)
 [ "$TARGET_RESULT" = "aarch64-apple-darwin" ] && pass "install.sh: get_target darwin aarch64" || fail "install.sh: get_target (got: $TARGET_RESULT)"
 
+MCP_TMP=$(mktemp -d)
+OPENCODE_MCP_RESULT=$(echo "$INSTALL_FUNCS" | HOME="$MCP_TMP/home" INSTALL_DIR="$MCP_TMP/bin" sh -c 'eval "$(cat)"; write_opencode_mcp_json "$HOME/.config/opencode" "$HOME/.config/opencode/opencode.json" >/dev/null; grep -q "\"type\":\"local\"" "$HOME/.config/opencode/opencode.json" && grep -q "\"command\":\[\"$INSTALL_DIR/kyle\",\"mcp\"\]" "$HOME/.config/opencode/opencode.json" && echo ok' 2>/dev/null || true)
+[ "$OPENCODE_MCP_RESULT" = "ok" ] && pass "install.sh: write OpenCode MCP config" || fail "install.sh: write OpenCode MCP config"
+
 info "Testing version fetch (requires network)..."
 VERSION_RESULT=$(echo "$INSTALL_FUNCS" | sh -c 'eval "$(cat)"; get_latest_version' 2>/dev/null || echo "")
 if [ -n "$VERSION_RESULT" ] && echo "$VERSION_RESULT" | grep -qE "^v[0-9]"; then

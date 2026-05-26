@@ -35,6 +35,28 @@ write_mcp_json() {
     fi
 }
 
+write_opencode_mcp_json() {
+    local dir="$1"
+    local file="$2"
+    mkdir -p "$dir"
+    if [ -f "$file" ]; then
+        warn "$file already exists — add kyle MCP manually:"
+        echo ""
+        echo "  \"mcp\": {"
+        echo "    \"kyle\": {"
+        echo "      \"type\": \"local\","
+        echo "      \"command\": [\"$INSTALL_DIR/kyle\", \"mcp\"],"
+        echo "      \"enabled\": true"
+        echo "    }"
+        echo "  }"
+    else
+        cat > "$file" <<EOF
+{"\$schema":"https://opencode.ai/config.json","mcp":{"kyle":{"type":"local","command":["$INSTALL_DIR/kyle","mcp"],"enabled":true}}}
+EOF
+        info "OpenCode MCP config written to $file"
+    fi
+}
+
 detect_os() {
     case "$(uname -s)" in
         Linux*)  echo "linux" ;;
@@ -179,10 +201,11 @@ install() {
         echo "  4) Windsurf"
         echo "  5) Codex (OpenAI)"
         echo "  6) Antigravity (Google)"
-        echo "  7) Other / manual"
-        echo "  8) Skip"
+        echo "  7) OpenCode (Anomaly)"
+        echo "  8) Other / manual"
+        echo "  9) Skip"
         echo ""
-        ask "Select AI client [1-8]:"
+        ask "Select AI client [1-9]:"
 
         case "$REPLY" in
             1)
@@ -207,7 +230,8 @@ install() {
                 fi
                 ;;
             6) write_mcp_json "$HOME/.gemini/antigravity" "$HOME/.gemini/antigravity/mcp_config.json" ;;
-            7)
+            7) write_opencode_mcp_json "$HOME/.config/opencode" "$HOME/.config/opencode/opencode.json" ;;
+            8)
                 echo ""
                 echo "Add kyle MCP to your client's config. The server command is:"
                 echo ""
@@ -220,6 +244,8 @@ install() {
                 echo "                   Format: [mcp_servers.kyle]"
                 echo "                           command = \"$INSTALL_DIR/kyle\""
                 echo "                           args = [\"mcp\"]"
+                echo "  OpenCode:        ~/.config/opencode/opencode.json"
+                echo "                   Format: {\"mcp\":{\"kyle\":{\"type\":\"local\",\"command\":[\"$INSTALL_DIR/kyle\",\"mcp\"],\"enabled\":true}}}"
                 echo ""
                 echo "Or run 'kyle mcp --config' to get a JSON snippet."
                 ;;
